@@ -1,0 +1,14 @@
+# Linux serverda doimiy ishlashi uchun: sudo cp youtube-agent.service /etc/systemd/system/
+# so'ng: sudo systemctl enable --now youtube-agent
+[Unit]
+Description=YouTube kanal agenti (Claude)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/opt/real-agent
+ExecStart=/opt/real-agent/.venv/bin/python -m youtube_agent run
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
