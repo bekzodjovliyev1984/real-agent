@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -15,12 +16,21 @@ def load_dotenv(path: str = ".env") -> None:
     p = Path(path)
     if not p.exists():
         return
-    for line in p.read_text(encoding="utf-8").splitlines():
+    for line in p.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+if sys.platform == "win32":
+    DEFAULT_FONT, DEFAULT_FONT_BOLD = r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf"
+elif sys.platform == "darwin":
+    DEFAULT_FONT = DEFAULT_FONT_BOLD = "/System/Library/Fonts/Supplemental/Arial.ttf"
+else:
+    DEFAULT_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    DEFAULT_FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 
 def _env(name: str, default: str = "") -> str:
@@ -77,7 +87,7 @@ class Config:
             video_language=_env("VIDEO_LANGUAGE", "o'zbek"),
             tts_voice=_env("TTS_VOICE", "uz-UZ-SardorNeural"),
             topics=[t.strip() for t in _env("TOPICS", "Tibbiyot,Ilm-fan,Sun'iy intellekt,Qiziqarli faktlar").split(",") if t.strip()],
-            font_path=_env("FONT_PATH", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-            font_bold_path=_env("FONT_BOLD_PATH", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            font_path=_env("FONT_PATH", DEFAULT_FONT),
+            font_bold_path=_env("FONT_BOLD_PATH", DEFAULT_FONT_BOLD),
             data_dir=data_dir,
         )
