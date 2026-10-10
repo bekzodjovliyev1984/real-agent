@@ -18,10 +18,10 @@ def main() -> None:
         from .youtube import authorize
         authorize(cfg.youtube_client_secret, cfg.youtube_token_file)
     elif cmd == "test-video":
-        from .content import ContentCreator
+        from .content import make_creator
         from .video import VideoMaker
         category = sys.argv[2] if len(sys.argv) > 2 else cfg.topics[0]
-        plan = ContentCreator(cfg.anthropic_model, cfg.video_language).create_video_plan(category, [])
+        plan = make_creator(cfg.llm_provider, cfg.llm_model, cfg.video_language).create_video_plan(category, [])
         video, thumb = VideoMaker(cfg.tts_voice, cfg.font_path, cfg.font_bold_path).build(
             plan, category, cfg.data_dir / "videos" / "test")
         print(f"Sarlavha: {plan.title}\nVideo: {video}\nMuqova: {thumb}")

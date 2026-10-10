@@ -1,10 +1,10 @@
-# 🤖 YouTube kanal agenti (Claude asosida)
+# 🤖 YouTube kanal agenti (Claude yoki OpenAI asosida)
 
 Bu agent ilmiy-ommabop YouTube kanalini avtomatik yuritadi:
 
 - **Mavzular:** Tibbiyot, Ilm-fan, Sun'iy intellekt, Qiziqarli faktlar (navbat bilan almashadi).
 - **Jadval:** Dushanba, Seshanba, Payshanba, Shanba — soat **19:00** (Toshkent vaqti).
-- **O'zi tayyorlaydi:** Claude internetdan yangi ma'lumot qidiradi → ssenariy yozadi → ovoz va slaydlardan video yasaydi → muqova chizadi.
+- **O'zi tayyorlaydi:** sun'iy intellekt (Claude yoki OpenAI) internetdan yangi ma'lumot qidiradi → ssenariy yozadi → ovoz va slaydlardan video yasaydi → muqova chizadi.
 - **Telegram orqali ruxsat so'raydi:** joylashdan ~3 soat oldin videoni sizga yuboradi:
   `✅ Ha, joylash` / `❌ Yo'q` / `🔄 Boshqa video yarat`.
   Tasdiqlasangiz, video YouTube'ga yuklanadi va aynan 19:00 da avtomatik ochiladi.
@@ -15,14 +15,14 @@ Bu agent ilmiy-ommabop YouTube kanalini avtomatik yuritadi:
 Sizning ruxsatingizsiz **hech narsa** YouTube'ga chiqmaydi.
 
 ```
- Jadval (16:00) ──► Claude: veb-qidiruv + ssenariy ──► Ovoz + slaydlar ──► video.mp4
+ Jadval (16:00) ──► AI: veb-qidiruv + ssenariy ──► Ovoz + slaydlar ──► video.mp4
                                                                               │
              Telegram: "Video qo'yilsinmi?"  ◄────────────────────────────────┘
                  │ ✅
                  ▼
  YouTube'ga yuklash (19:00 da ochiladi) ──► Telegram: havola
 
- Har 30 daq: yangi kommentlar ──► Claude javob loyihasi ──► Telegram: "Javob yozilsinmi?" ──► YouTube
+ Har 30 daq: yangi kommentlar ──► AI javob loyihasi ──► Telegram: "Javob yozilsinmi?" ──► YouTube
 ```
 
 ## ⚠️ Muhim: kanalni bir marta o'zingiz ochasiz
@@ -49,8 +49,16 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-### 2. Claude API kaliti
-[console.anthropic.com](https://console.anthropic.com) → **API Keys** → yangi kalit → `.env` dagi `ANTHROPIC_API_KEY` ga yozing.
+### 2. Sun'iy intellekt kaliti (ikkisidan biri)
+Matnni (tadqiqot, ssenariy, komment javoblari) yozadigan provayderni `.env` dagi `LLM_PROVIDER` bilan tanlaysiz:
+
+- **OpenAI:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys) → yangi kalit →
+  `LLM_PROVIDER=openai`, `OPENAI_API_KEY=sk-...` (model: `OPENAI_MODEL`, standart `gpt-5`).
+- **Claude:** [console.anthropic.com](https://console.anthropic.com) → **API Keys** → yangi kalit →
+  `LLM_PROVIDER=claude`, `ANTHROPIC_API_KEY=sk-ant-...` (model: `CLAUDE_MODEL`, standart `claude-opus-5-5`).
+
+Keyinroq istalgan vaqtda bitta qatorni o'zgartirib, boshqasiga o'tishingiz mumkin. Video yasash
+(slaydlar, ovoz, montaj) ikkala holatda ham bir xil.
 
 ### 3. Telegram bot
 1. Telegram'da [@BotFather](https://t.me/BotFather) → `/newbot` → tokenni `.env` dagi `TELEGRAM_BOT_TOKEN` ga yozing.
@@ -105,6 +113,7 @@ docker run -d --restart=always --env-file .env \
 
 | O'zgaruvchi | Standart | Izoh |
 |---|---|---|
+| `LLM_PROVIDER` | `claude` | `claude` yoki `openai` |
 | `PUBLISH_DAYS` | `mon,tue,thu,sat` | Joylash kunlari |
 | `PUBLISH_TIME` | `19:00` | Joylash vaqti |
 | `TIMEZONE` | `Asia/Tashkent` | Vaqt mintaqasi |
@@ -119,7 +128,7 @@ docker run -d --restart=always --env-file .env \
 ```
 youtube_agent/
   agent.py     — jadval, Telegram tugmalari, asosiy sikl
-  content.py   — Claude: veb-qidiruv, ssenariy, komment javoblari
+  content.py   — Claude / OpenAI: veb-qidiruv, ssenariy, komment javoblari
   video.py     — slaydlar (Pillow) + ovoz (edge-tts) + montaj (ffmpeg)
   youtube.py   — YouTube Data API: yuklash, kommentlar
   telegram.py  — Telegram Bot API
@@ -132,4 +141,4 @@ youtube_agent/
 - Videolar YouTube'da **"AI yordamida yaratilgan"** (`containsSyntheticMedia`) deb belgilanadi — bu YouTube qoidalari talabi.
 - Tibbiy videolarga avtomatik ravishda "shifokor maslahatining o'rnini bosmaydi" ogohlantirishi qo'shiladi.
 - YouTube API'ning kunlik limiti 10 000 birlik; bitta video yuklash ~1600 birlik. Haftasiga 4 ta video bemalol sig'adi.
-- Claude API pullik: bitta video taxminan bir necha o'n sent turadi (veb-qidiruv + ssenariy).
+- Claude va OpenAI API pullik: bitta video taxminan bir necha o'n sent turadi (veb-qidiruv + ssenariy).

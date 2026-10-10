@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .config import Config
-from .content import ContentCreator, VideoPlan
+from .content import VideoPlan, make_creator
 from .state import State
 from .telegram import TelegramBot
 from .video import VideoMaker
@@ -27,7 +27,7 @@ class Agent:
         self.cfg = cfg
         self.state = State(cfg.data_dir / "state.json")
         self.bot = TelegramBot(cfg.telegram_token, cfg.telegram_chat_id)
-        self.creator = ContentCreator(cfg.anthropic_model, cfg.video_language)
+        self.creator = make_creator(cfg.llm_provider, cfg.llm_model, cfg.video_language)
         self.maker = VideoMaker(cfg.tts_voice, cfg.font_path, cfg.font_bold_path)
         self.youtube = YouTube(cfg.youtube_token_file)
         self.jobs = ThreadPoolExecutor(max_workers=1)  # og'ir ishlar navbat bilan

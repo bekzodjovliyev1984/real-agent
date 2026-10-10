@@ -29,7 +29,8 @@ def _env(name: str, default: str = "") -> str:
 
 @dataclass
 class Config:
-    anthropic_model: str
+    llm_provider: str
+    llm_model: str
     telegram_token: str
     telegram_chat_id: str
     youtube_client_secret: str
@@ -55,10 +56,12 @@ class Config:
         load_dotenv()
         hh, mm = _env("PUBLISH_TIME", "19:00").split(":")
         days = [WEEKDAYS[d.strip().lower()[:3]] for d in _env("PUBLISH_DAYS", "mon,tue,thu,sat").split(",") if d.strip()]
+        provider = _env("LLM_PROVIDER", "claude").lower()
         data_dir = Path(_env("DATA_DIR", "data"))
         data_dir.mkdir(parents=True, exist_ok=True)
         return cls(
-            anthropic_model=_env("CLAUDE_MODEL", "claude-opus-5-5"),
+            llm_provider=provider,
+            llm_model=_env("OPENAI_MODEL", "gpt-5") if provider == "openai" else _env("CLAUDE_MODEL", "claude-opus-5-5"),
             telegram_token=_env("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=_env("TELEGRAM_CHAT_ID"),
             youtube_client_secret=_env("YOUTUBE_CLIENT_SECRET", "client_secret.json"),
