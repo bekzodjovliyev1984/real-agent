@@ -58,6 +58,7 @@ class Config:
     topics: list[str]
     tts_rate: str
     pexels_key: str
+    pixabay_key: str
     music_dir: str
     ai_images: bool
     font_path: str
@@ -69,7 +70,7 @@ class Config:
         from .video import ShortsSettings
 
         return ShortsSettings(self.tts_voice, self.tts_rate, self.font_path, self.font_bold_path,
-                              self.pexels_key, self.music_dir, self.ai_images)
+                              self.pexels_key, self.pixabay_key, self.music_dir, self.ai_images)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -99,6 +100,7 @@ class Config:
             topics=[t.strip() for t in _env("TOPICS", "Tibbiyot,Ilm-fan,Sun'iy intellekt,Qiziqarli faktlar").split(",") if t.strip()],
             tts_rate=_env("TTS_RATE", "+8%"),
             pexels_key=_env("PEXELS_API_KEY"),
+            pixabay_key=_env("PIXABAY_API_KEY"),
             music_dir=_env("MUSIC_DIR", "music"),
             ai_images=_env("AI_IMAGES", "0").lower() in ("1", "true", "yes", "ha"),
             font_path=_env("FONT_PATH", DEFAULT_FONT),

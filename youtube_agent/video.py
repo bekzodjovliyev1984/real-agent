@@ -47,6 +47,7 @@ class ShortsSettings:
     font_path: str
     font_bold_path: str
     pexels_key: str = ""
+    pixabay_key: str = ""
     music_dir: str = ""
     ai_images: bool = False
 
@@ -77,7 +78,7 @@ def _ass_escape(text: str) -> str:
 
 # ------------------------------------------------------------------- vizuallar
 class Visuals:
-    """Sahna uchun fon: Pexels video -> Pexels rasm -> AI rasm -> rangli fon."""
+    """Sahna uchun fon: Pexels/Pixabay video -> Pexels/Pixabay rasm -> AI rasm -> rangli fon."""
 
     def __init__(self, settings: ShortsSettings):
         self.s = settings
@@ -119,6 +120,36 @@ class Visuals:
             return self._download(p["src"].get("large2x") or p["src"]["original"], out)
         return None
 
+    def _pixabay(self, url: str, query: str, **extra) -> list[dict]:
+        resp = self.http.get(url, params={"key": self.s.pixabay_key, "q": query[:100], "safesearch": "true",
+                                          "per_page": 20, **extra})
+        resp.raise_for_status()
+        return resp.json().get("hits", [])
+
+    def pixabay_video(self, query: str, out: Path) -> Path | None:
+        candidates = []
+        for hit in self._pixabay("https://pixabay.com/api/videos/", query):
+            if hit["id"] in self.used:
+                continue
+            files = [f for f in hit.get("videos", {}).values() if f.get("url") and f.get("height", 0) >= 720]
+            if files:
+                best = min(files, key=lambda f: abs(f["height"] - 1920) if f["height"] >= f["width"] else abs(f["height"] - 1080))
+                vertical = best["height"] >= best["width"]
+                candidates.append((not vertical, hit["id"], best["url"]))  # vertikal videolar birinchi
+        if not candidates:
+            return None
+        _, vid, url = sorted(candidates, key=lambda c: c[0])[0]
+        self.used.add(vid)
+        return self._download(url, out)
+
+    def pixabay_photo(self, query: str, out: Path) -> Path | None:
+        for hit in self._pixabay("https://pixabay.com/api/", query, image_type="photo", orientation="vertical"):
+            if hit["id"] in self.used:
+                continue
+            self.used.add(hit["id"])
+            return self._download(hit["largeImageURL"], out)
+        return None
+
     def ai_image(self, prompt: str, out: Path) -> Path | None:
         from openai import OpenAI
 
@@ -143,6 +174,9 @@ class Visuals:
         if self.s.pexels_key:
             attempts += [(self.pexels_video, query, base.with_suffix(".mp4"), True),
                          (self.pexels_photo, query, base.with_suffix(".jpg"), False)]
+        if self.s.pixabay_key:
+            attempts += [(self.pixabay_video, query, base.with_suffix(".mp4"), True),
+                         (self.pixabay_photo, query, base.with_suffix(".jpg"), False)]
         if self.s.ai_images:
             attempts.append((self.ai_image, image_prompt, base.with_suffix(".png"), False))
         for fn, arg, out, is_video in attempts:

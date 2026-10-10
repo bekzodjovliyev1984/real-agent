@@ -4,7 +4,7 @@ Bu agent **YouTube Shorts** kanalini avtomatik yuritadi: har safar eng so'nggi, 
 
 - **Mavzular:** Tibbiyot, Ilm-fan, Sun'iy intellekt, Qiziqarli faktlar (navbat bilan almashadi).
 - **Jadval:** Dushanba, Seshanba, Payshanba, Shanba — soat **19:00** (Toshkent vaqti).
-- **O'zi tayyorlaydi:** sun'iy intellekt (Claude yoki OpenAI) oxirgi haftalardagi eng qiziq yangilikni topadi → kuchli "hook" bilan qisqa ssenariy yozadi → har sahnaga mos real stok-video (Pexels) oladi → diktor ovozi, so'zma-so'z yonadigan katta subtitrlar va fon musiqasi bilan 1080×1920 Shorts yasaydi.
+- **O'zi tayyorlaydi:** sun'iy intellekt (Claude yoki OpenAI) oxirgi haftalardagi eng qiziq yangilikni topadi → kuchli "hook" bilan qisqa ssenariy yozadi → har sahnaga mos real stok-video (Pixabay/Pexels) oladi → diktor ovozi, so'zma-so'z yonadigan katta subtitrlar va fon musiqasi bilan 1080×1920 Shorts yasaydi.
 - **Telegram orqali ruxsat so'raydi:** joylashdan ~3 soat oldin videoni sizga yuboradi:
   `✅ Ha, joylash` / `❌ Yo'q` / `🔄 Boshqa video yarat`.
   Tasdiqlasangiz, video YouTube'ga yuklanadi va aynan 19:00 da avtomatik ochiladi.
@@ -60,12 +60,13 @@ Matnni (tadqiqot, ssenariy, komment javoblari) yozadigan provayderni `.env` dagi
 Keyinroq istalgan vaqtda bitta qatorni o'zgartirib, boshqasiga o'tishingiz mumkin. Video yasash
 (slaydlar, ovoz, montaj) ikkala holatda ham bir xil.
 
-### 2.1. Pexels kaliti (bepul, video kadrlar uchun)
-1. [pexels.com/api](https://www.pexels.com/api/) → ro'yxatdan o'ting → **Your API Key**.
-2. Kalitni `.env` dagi `PEXELS_API_KEY=` ga yozing.
+### 2.1. Stok-video kaliti (bepul, video kadrlar uchun)
+- **Pixabay:** [pixabay.com](https://pixabay.com) da ro'yxatdan o'ting → [pixabay.com/api/docs](https://pixabay.com/api/docs/)
+  sahifasida "Parameters" bo'limidagi `key` qiymatini `.env` dagi `PIXABAY_API_KEY=` ga yozing.
+- **Pexels** (ixtiyoriy): [pexels.com/api](https://www.pexels.com/api/) → `PEXELS_API_KEY=`.
 
 Kalit bo'lmasa, videoda real kadrlar o'rniga oddiy rangli fon bo'ladi. `AI_IMAGES=1` qilsangiz,
-Pexels'da topilmagan sahnalar uchun OpenAI rasm chizadi (pullik).
+stok-video topilmagan sahnalar uchun OpenAI rasm chizadi (pullik).
 
 **Fon musiqasi (ixtiyoriy):** loyiha ichida `music` papkasini yarating va unga mualliflik
 huquqisiz `.mp3` fayllarni qo'ying (masalan, YouTube Studio → Audio Library'dan). Agent har
