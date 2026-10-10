@@ -28,7 +28,7 @@ class Agent:
         self.state = State(cfg.data_dir / "state.json")
         self.bot = TelegramBot(cfg.telegram_token, cfg.telegram_chat_id)
         self.creator = make_creator(cfg.llm_provider, cfg.llm_model, cfg.video_language)
-        self.maker = VideoMaker(cfg.tts_voice, cfg.font_path, cfg.font_bold_path)
+        self.maker = VideoMaker(cfg.shorts_settings())
         self.youtube = YouTube(cfg.youtube_token_file)
         self.jobs = ThreadPoolExecutor(max_workers=1)  # og'ir ishlar navbat bilan
 
@@ -87,7 +87,7 @@ class Agent:
                                   slot=slot.isoformat() if slot else None, plan=plan.model_dump(),
                                   video=str(video), thumb=str(thumb))
         caption = (
-            f"🎬 Yangi video tayyor!\n\n📌 {plan.title}\n🗂 {category}\n⏰ Joylash vaqti: {when}\n\n"
+            f"🎬 Yangi Shorts tayyor!\n\n📌 {plan.title}\n🗂 {category}\n⏰ Joylash vaqti: {when}\n\n"
             f"{plan.description[:600]}\n\nVideo qo'yilsinmi?"
         )
         buttons = self.bot.buttons([
@@ -104,7 +104,7 @@ class Agent:
         slot = datetime.fromisoformat(item["slot"]) if item.get("slot") else None
         self.bot.send(f"⬆️ «{plan.title}» YouTube'ga yuklanmoqda...")
         video_id = self.youtube.upload(
-            video=Path(item["video"]), thumb=Path(item["thumb"]),
+            video=Path(item["video"]), thumb=None,  # Shorts muqovasini YouTube o'zi tanlaydi
             title=plan.title, description=plan.description, tags=plan.tags,
             category_id=self.cfg.youtube_category_id, publish_at=slot,
         )

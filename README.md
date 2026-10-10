@@ -1,10 +1,10 @@
 # 🤖 YouTube kanal agenti (Claude yoki OpenAI asosida)
 
-Bu agent ilmiy-ommabop YouTube kanalini avtomatik yuritadi:
+Bu agent **YouTube Shorts** kanalini avtomatik yuritadi: har safar eng so'nggi, hayratlanarli yangilikni topib, 35–50 soniyalik vertikal video qiladi.
 
 - **Mavzular:** Tibbiyot, Ilm-fan, Sun'iy intellekt, Qiziqarli faktlar (navbat bilan almashadi).
 - **Jadval:** Dushanba, Seshanba, Payshanba, Shanba — soat **19:00** (Toshkent vaqti).
-- **O'zi tayyorlaydi:** sun'iy intellekt (Claude yoki OpenAI) internetdan yangi ma'lumot qidiradi → ssenariy yozadi → ovoz va slaydlardan video yasaydi → muqova chizadi.
+- **O'zi tayyorlaydi:** sun'iy intellekt (Claude yoki OpenAI) oxirgi haftalardagi eng qiziq yangilikni topadi → kuchli "hook" bilan qisqa ssenariy yozadi → har sahnaga mos real stok-video (Pexels) oladi → diktor ovozi, so'zma-so'z yonadigan katta subtitrlar va fon musiqasi bilan 1080×1920 Shorts yasaydi.
 - **Telegram orqali ruxsat so'raydi:** joylashdan ~3 soat oldin videoni sizga yuboradi:
   `✅ Ha, joylash` / `❌ Yo'q` / `🔄 Boshqa video yarat`.
   Tasdiqlasangiz, video YouTube'ga yuklanadi va aynan 19:00 da avtomatik ochiladi.
@@ -15,7 +15,7 @@ Bu agent ilmiy-ommabop YouTube kanalini avtomatik yuritadi:
 Sizning ruxsatingizsiz **hech narsa** YouTube'ga chiqmaydi.
 
 ```
- Jadval (16:00) ──► AI: veb-qidiruv + ssenariy ──► Ovoz + slaydlar ──► video.mp4
+ Jadval (16:00) ──► AI: yangilik + ssenariy ──► Kadrlar + ovoz + subtitr ──► short.mp4
                                                                               │
              Telegram: "Video qo'yilsinmi?"  ◄────────────────────────────────┘
                  │ ✅
@@ -59,6 +59,17 @@ Matnni (tadqiqot, ssenariy, komment javoblari) yozadigan provayderni `.env` dagi
 
 Keyinroq istalgan vaqtda bitta qatorni o'zgartirib, boshqasiga o'tishingiz mumkin. Video yasash
 (slaydlar, ovoz, montaj) ikkala holatda ham bir xil.
+
+### 2.1. Pexels kaliti (bepul, video kadrlar uchun)
+1. [pexels.com/api](https://www.pexels.com/api/) → ro'yxatdan o'ting → **Your API Key**.
+2. Kalitni `.env` dagi `PEXELS_API_KEY=` ga yozing.
+
+Kalit bo'lmasa, videoda real kadrlar o'rniga oddiy rangli fon bo'ladi. `AI_IMAGES=1` qilsangiz,
+Pexels'da topilmagan sahnalar uchun OpenAI rasm chizadi (pullik).
+
+**Fon musiqasi (ixtiyoriy):** loyiha ichida `music` papkasini yarating va unga mualliflik
+huquqisiz `.mp3` fayllarni qo'ying (masalan, YouTube Studio → Audio Library'dan). Agent har
+videoga tasodifiy bittasini past ovozda qo'shadi.
 
 ### 3. Telegram bot
 1. Telegram'da [@BotFather](https://t.me/BotFather) → `/newbot` → tokenni `.env` dagi `TELEGRAM_BOT_TOKEN` ga yozing.

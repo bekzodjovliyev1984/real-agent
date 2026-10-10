@@ -16,17 +16,17 @@ WEB_SEARCH = {"type": "web_search_20260209", "name": "web_search", "max_uses": 8
 
 
 class Scene(BaseModel):
-    heading: str = Field(description="Ekranda ko'rinadigan qisqa sarlavha (5-8 so'z)")
-    bullets: list[str] = Field(description="Ekrandagi 2-4 ta qisqa punkt")
-    narration: str = Field(description="Diktor o'qiydigan matn (60-120 so'z)")
+    narration: str = Field(description="Diktor matni: 1-2 qisqa, jonli gap (10-25 so'z)")
+    visual_query: str = Field(description="Shu sahnaga mos stok-video qidiruvi, INGLIZCHA, 2-4 so'z (masalan: 'brain neurons glowing')")
+    image_prompt: str = Field(description="Agar video topilmasa, AI rasm uchun inglizcha batafsil tavsif (matnsiz, fotorealistik)")
 
 
 class VideoPlan(BaseModel):
-    title: str = Field(description="YouTube sarlavhasi, 100 belgidan kam, qiziqarli, lekin clickbait emas")
-    description: str = Field(description="YouTube tavsifi: qisqa mazmun, manbalar ro'yxati, hashtaglar")
-    tags: list[str] = Field(description="10-15 ta teg")
-    thumbnail_text: str = Field(description="Muqova uchun 2-5 so'zlik katta yozuv")
-    scenes: list[Scene] = Field(description="6-10 ta sahna: kirish, asosiy qism, xulosa")
+    title: str = Field(description="Shorts sarlavhasi: 60 belgigacha, hayratlantiruvchi, oxirida #shorts")
+    description: str = Field(description="2-3 gaplik tavsif, manbalar va 3-5 hashtag")
+    tags: list[str] = Field(description="8-12 ta teg")
+    hook_text: str = Field(description="Birinchi 2 soniyada ekran tepasida turadigan 2-5 so'zlik katta yozuv")
+    scenes: list[Scene] = Field(description="5-8 ta sahna; birinchisi - hook, oxirgisi - qisqa yakun")
     sources: list[str] = Field(description="Foydalanilgan manbalar URL'lari")
 
 
@@ -42,27 +42,34 @@ class ContentRefused(RuntimeError):
 
 # ---------------------------------------------------------------- umumiy promptlar
 def research_prompt(category: str, avoid_titles: list[str]) -> str:
-    avoid = "\n".join(f"- {t}" for t in avoid_titles[-40:]) or "(hali yo'q)"
+    avoid = "\n".join(f"- {t}" for t in avoid_titles[-60:]) or "(hali yo'q)"
     return (
-        f"Sen ilmiy-ommabop YouTube kanali uchun tadqiqotchisan. Kategoriya: «{category}».\n"
-        "Veb-qidiruv orqali shu kategoriyada so'nggi oylardagi eng qiziqarli, ishonchli manbalarga "
-        "(ilmiy jurnallar, universitetlar, WHO, NASA, yirik nashrlar) tayangan BITTA mavzuni tanla.\n"
+        f"Sen viral YouTube Shorts kanali uchun yangilik ovchisisan. Kategoriya: «{category}».\n"
+        "Veb-qidiruv orqali OXIRGI 1-3 HAFTADAGI eng hayratlanarli, odamlar do'stiga aytib beradigan "
+        "BITTA yangilik yoki kashfiyotni top (yangi texnologiya, rekord, g'aroyib kashfiyot, kutilmagan "
+        "tadqiqot natijasi). Zerikarli, faqat mutaxassislarga qiziq mavzularni tanlama.\n"
+        "Ishonchli manbalar: yirik nashrlar, ilmiy jurnallar, universitetlar, NASA, WHO va h.k.\n"
         f"Avval chiqqan videolar (takrorlama):\n{avoid}\n\n"
-        "Natija: tanlangan mavzu, nega qiziq, 8-12 ta aniq fakt (raqamlar, sanalar bilan), "
-        "har bir faktning manba URL'i. Tibbiyot mavzusida faqat tasdiqlangan ma'lumot ber, "
-        "davolash bo'yicha shaxsiy maslahat berma."
+        "Natija: yangilik nima, nega hayratlanarli, oddiy odam hayotiga qanday ta'sir qiladi, "
+        "3-5 ta aniq fakt (raqamlar bilan) va manba URL'lari."
     )
 
 
 def script_prompt(language: str, category: str, research_notes: str) -> str:
     return (
-        f"Quyidagi tadqiqot asosida {language} tilida 4-6 daqiqalik ilmiy-ommabop video ssenariysini yoz. "
-        f"Kategoriya: {category}.\n"
-        "Talablar: birinchi sahnada kuchli 'hook' (savol yoki hayratlanarli fakt); sodda, jonli til; "
-        "faqat tadqiqotdagi faktlardan foydalan; oxirgi sahnada xulosa va obunaga chaqiriq. "
-        "Tavsif oxiriga manbalarni va mavzuga oid 3-5 hashtag qo'sh. "
-        "Tibbiyot bo'lsa tavsifga 'Bu video ma'lumot uchun, shifokor maslahatining o'rnini bosmaydi' "
-        "degan ogohlantirish qo'sh.\n\n"
+        f"Quyidagi yangilik asosida {language} tilida 35-50 soniyalik YouTube Shorts ssenariysini yoz "
+        f"(jami 90-130 so'z). Kategoriya: {category}.\n"
+        "QOIDALAR:\n"
+        "- 1-sahna HOOK: tomoshabinni 2 soniyada ushlab qoladigan hayratlantiruvchi gap "
+        "(masalan: 'Olimlar hozirgina ... qildi!', 'Buni bilsangiz hayron qolasiz...'). Salomlashish YO'Q.\n"
+        "- Yangilik kabi gapir: kim, nima qildi, nima uchun bu muhim. Jonli, so'zlashuv tili, qisqa gaplar.\n"
+        "- Viktorina, test savoli, 'savol: ...' kabi sarlavhalar, ro'yxatlar va quruq raqamlar to'plami YO'Q.\n"
+        "- Raqamlarni oddiy qilib ayt ('deyarli 2 baravar', '50 yorug'lik yili uzoqda').\n"
+        "- Maxsus belgilar (⊕, ±, Å, ~) ishlatma - faqat oddiy harflar va raqamlar.\n"
+        "- Oxirgi sahna: 1 gaplik kuchli xulosa + 'Bunday yangiliklar uchun obuna bo'ling!'.\n"
+        "- Faqat tadqiqotdagi faktlardan foydalan, o'ylab topma.\n"
+        "- Tibbiyot bo'lsa tavsifga 'Ma'lumot uchun, shifokor maslahatining o'rnini bosmaydi' qo'sh.\n"
+        "- Har sahna uchun visual_query - aynan shu gapga mos, chiroyli kadr beradigan inglizcha qidiruv.\n\n"
         f"TADQIQOT:\n{research_notes}"
     )
 
@@ -98,6 +105,8 @@ class BaseCreator:
         notes = self.research(category, avoid_titles)
         log.info("Ssenariy yozilmoqda")
         plan = self.write_script(category, notes)
+        if "#shorts" not in plan.title.lower():
+            plan.title = f"{plan.title[:90]} #shorts"
         plan.title = plan.title[:100]
         plan.description = plan.description[:4900]
         return plan

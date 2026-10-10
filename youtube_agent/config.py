@@ -56,10 +56,20 @@ class Config:
     video_language: str
     tts_voice: str
     topics: list[str]
+    tts_rate: str
+    pexels_key: str
+    music_dir: str
+    ai_images: bool
     font_path: str
     font_bold_path: str
     data_dir: Path
     extra: dict = field(default_factory=dict)
+
+    def shorts_settings(self):
+        from .video import ShortsSettings
+
+        return ShortsSettings(self.tts_voice, self.tts_rate, self.font_path, self.font_bold_path,
+                              self.pexels_key, self.music_dir, self.ai_images)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -87,6 +97,10 @@ class Config:
             video_language=_env("VIDEO_LANGUAGE", "o'zbek"),
             tts_voice=_env("TTS_VOICE", "uz-UZ-SardorNeural"),
             topics=[t.strip() for t in _env("TOPICS", "Tibbiyot,Ilm-fan,Sun'iy intellekt,Qiziqarli faktlar").split(",") if t.strip()],
+            tts_rate=_env("TTS_RATE", "+8%"),
+            pexels_key=_env("PEXELS_API_KEY"),
+            music_dir=_env("MUSIC_DIR", "music"),
+            ai_images=_env("AI_IMAGES", "0").lower() in ("1", "true", "yes", "ha"),
             font_path=_env("FONT_PATH", DEFAULT_FONT),
             font_bold_path=_env("FONT_BOLD_PATH", DEFAULT_FONT_BOLD),
             data_dir=data_dir,
