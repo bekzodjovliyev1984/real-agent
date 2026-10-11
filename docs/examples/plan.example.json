@@ -1,0 +1,180 @@
+{
+  "title": "10 daqiqada toʻladigan batareya #shorts",
+  "language": "uz",
+  "category": "Yangi mashinalar",
+  "topic": "Qattiq batareya",
+  "target_duration_seconds": 32.0,
+  "hook_type": "question",
+  "hook": "Elektromobil batareyasi bor yoʻgʻi oʻn daqiqada toʻlsa, benzin quyish shoxobchalari kerak boʻlarmidi?",
+  "description": "Yangi batareya haqida.",
+  "tags": [
+    "batareya",
+    "elektromobil"
+  ],
+  "music_mood": "inspiring",
+  "claims": [
+    {
+      "id": "claim_01",
+      "claim": "Fakt 1",
+      "status": "verified",
+      "sources": [
+        {
+          "title": "Manba 1",
+          "url": "https://www.example-lab.org/news/battery-2026",
+          "excerpt": "iqtibos",
+          "reachable": true
+        }
+      ],
+      "qualification": ""
+    },
+    {
+      "id": "claim_02",
+      "claim": "Fakt 2",
+      "status": "verified",
+      "sources": [
+        {
+          "title": "Manba 2",
+          "url": "https://www.example-uni.edu/research/solid-state",
+          "excerpt": "iqtibos",
+          "reachable": true
+        }
+      ],
+      "qualification": ""
+    },
+    {
+      "id": "claim_03",
+      "claim": "Fakt 3",
+      "status": "verified",
+      "sources": [
+        {
+          "title": "Manba 3",
+          "url": "https://www.example-journal.com/articles/s41586-026",
+          "excerpt": "iqtibos",
+          "reachable": true
+        }
+      ],
+      "qualification": ""
+    },
+    {
+      "id": "claim_04",
+      "claim": "Fakt 4",
+      "status": "verified",
+      "sources": [
+        {
+          "title": "Manba 4",
+          "url": "https://www.example-auto.com/press/ev-charge",
+          "excerpt": "iqtibos",
+          "reachable": true
+        }
+      ],
+      "qualification": ""
+    }
+  ],
+  "scenes": [
+    {
+      "id": 1,
+      "voiceover_text": "Elektromobil batareyasi bor yoʻgʻi oʻn daqiqada toʻlsa, benzin quyish shoxobchalari kerak boʻlarmidi?",
+      "subtitle_text": "Elektromobil batareyasi bor yoʻgʻi 10 daqiqada toʻlsa, benzin quyish shoxobchalari kerak boʻlarmidi?",
+      "estimated_duration": 5.7,
+      "visual_description": "sahna 0 kadri",
+      "visual_purpose": "tushuntirish",
+      "visual_source_type": "stock_video",
+      "visual_search_queries": [
+        "query 0"
+      ],
+      "video_generation_prompt": null,
+      "on_screen_text": "10 DAQIQA",
+      "on_screen_subtext": "",
+      "sound_effect": "none",
+      "transition": "cut",
+      "related_claim_ids": [
+        "claim_01"
+      ],
+      "relevance_criteria": "mos kadr"
+    },
+    {
+      "id": 2,
+      "voiceover_text": "Olimlar aynan shu savolga javob topishga yaqinlashdi va yangi qattiq batareya sinovdan oʻtdi.",
+      "subtitle_text": "Olimlar aynan shu savolga javob topishga yaqinlashdi va yangi qattiq batareya sinovdan oʻtdi.",
+      "estimated_duration": 6.1,
+      "visual_description": "sahna 1 kadri",
+      "visual_purpose": "tushuntirish",
+      "visual_source_type": "stock_video",
+      "visual_search_queries": [
+        "query 1"
+      ],
+      "video_generation_prompt": null,
+      "on_screen_text": "",
+      "on_screen_subtext": "",
+      "sound_effect": "none",
+      "transition": "cut",
+      "related_claim_ids": [
+        "claim_01"
+      ],
+      "relevance_criteria": "mos kadr"
+    },
+    {
+      "id": 3,
+      "voiceover_text": "Bu batareya ichida suyuqlik yoʻq, shuning uchun u qizib ketmaydi va yongʻin xavfi ancha past.",
+      "subtitle_text": "Bu batareya ichida suyuqlik yoʻq, shuning uchun u qizib ketmaydi va yongʻin xavfi ancha past.",
+      "estimated_duration": 7.0,
+      "visual_description": "sahna 2 kadri",
+      "visual_purpose": "tushuntirish",
+      "visual_source_type": "still_image",
+      "visual_search_queries": [
+        "query 2"
+      ],
+      "video_generation_prompt": null,
+      "on_screen_text": "",
+      "on_screen_subtext": "",
+      "sound_effect": "none",
+      "transition": "crossfade",
+      "related_claim_ids": [
+        "claim_02"
+      ],
+      "relevance_criteria": "mos kadr"
+    },
+    {
+      "id": 4,
+      "voiceover_text": "Sinovda u ming marta zaryadlangandan keyin ham sigʻimining toʻqson foizini saqlab qoldi.",
+      "subtitle_text": "Sinovda u ming marta zaryadlangandan keyin ham sigʻimining toʻqson foizini saqlab qoldi.",
+      "estimated_duration": 5.7,
+      "visual_description": "sahna 3 kadri",
+      "visual_purpose": "tushuntirish",
+      "visual_source_type": "graphic",
+      "visual_search_queries": [
+        "query 3"
+      ],
+      "video_generation_prompt": null,
+      "on_screen_text": "90%",
+      "on_screen_subtext": "",
+      "sound_effect": "none",
+      "transition": "cut",
+      "related_claim_ids": [
+        "claim_03"
+      ],
+      "relevance_criteria": "mos kadr"
+    },
+    {
+      "id": 5,
+      "voiceover_text": "Demak, yaqin yillarda zaryad kutish benzin quyishdek tez boʻlishi mumkin, lekin ommaviy ishlab chiqarish hali oldinda.",
+      "subtitle_text": "Demak, yaqin yillarda zaryad kutish benzin quyishdek tez boʻlishi mumkin, lekin ommaviy ishlab chiqarish hali oldinda.",
+      "estimated_duration": 7.5,
+      "visual_description": "sahna 4 kadri",
+      "visual_purpose": "tushuntirish",
+      "visual_source_type": "stock_video",
+      "visual_search_queries": [
+        "query 4"
+      ],
+      "video_generation_prompt": null,
+      "on_screen_text": "",
+      "on_screen_subtext": "",
+      "sound_effect": "none",
+      "transition": "cut",
+      "related_claim_ids": [
+        "claim_04"
+      ],
+      "relevance_criteria": "mos kadr"
+    }
+  ]
+}

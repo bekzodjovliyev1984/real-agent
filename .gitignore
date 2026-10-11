@@ -5,3 +5,7 @@ __pycache__/
 client_secret*.json
 token.json
 videos/
+data/
+music/
+sfx/
+.pytest_cache/

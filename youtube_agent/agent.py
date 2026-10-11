@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import logging
-import shutil
 import time
 import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
+from .analytics import ChannelDB, snapshot_all, summary
 from .config import Config
-from .content import VideoPlan, make_creator
+from .content import draft_comment_reply
+from .factory import build_llm, build_pipeline
+from .jobs import Job
+from .media import extract_frames
+from .orchestrator import summarize_job
+from .publishing import can_publish, publish
+from .schemas import JobState
 from .state import State
 from .telegram import TelegramBot
-from .video import VideoMaker
 from .youtube import YouTube
 
 log = logging.getLogger(__name__)
@@ -27,8 +31,9 @@ class Agent:
         self.cfg = cfg
         self.state = State(cfg.data_dir / "state.json")
         self.bot = TelegramBot(cfg.telegram_token, cfg.telegram_chat_id)
-        self.creator = make_creator(cfg.llm_provider, cfg.llm_model, cfg.video_language)
-        self.maker = VideoMaker(cfg.shorts_settings())
+        self.llm = build_llm(cfg)
+        self.pipeline = build_pipeline(cfg, self.llm)
+        self.db = ChannelDB(cfg.db_path)
         self.youtube = YouTube(cfg.youtube_token_file)
         self.jobs = ThreadPoolExecutor(max_workers=1)  # og'ir ishlar navbat bilan
 
@@ -78,41 +83,54 @@ class Agent:
     def prepare_video(self, slot: datetime | None, category: str | None = None) -> None:
         category = category or self.next_category()
         when = f"{DAY_NAMES[slot.weekday()]} {slot:%H:%M}" if slot else "darhol"
-        self.bot.send(f"🔎 «{category}» bo'yicha yangi video tayyorlanmoqda ({when} uchun)...")
-        plan = self.creator.create_video_plan(category, self.state["published_titles"])
+        self.bot.send(f"🔎 «{category}» bo'yicha yangi Shorts tayyorlanmoqda ({when} uchun). "
+                      "Tadqiqot, fakt-tekshiruv, montaj va sifat nazorati 5-15 daqiqa oladi...")
+        job = self.pipeline.new_job(category, slot=slot.isoformat() if slot else None)
+        self.pipeline.run(job, self.state["published_titles"], summary(self.db))
+        self._offer(job, slot, category, when)
+
+    def _offer(self, job: Job, slot: datetime | None, category: str, when: str) -> None:
+        """Tayyor (yoki ko'rib chiqish kerak bo'lgan) videoni egasiga Telegram'da yuboradi."""
         pid = uuid.uuid4().hex[:8]
-        workdir = self.cfg.data_dir / "videos" / pid
-        video, thumb = self.maker.build(plan, category, workdir)
-        self.state.update_pending(pid, kind="video", status="waiting", category=category,
-                                  slot=slot.isoformat() if slot else None, plan=plan.model_dump(),
-                                  video=str(video), thumb=str(thumb))
-        caption = (
-            f"🎬 Yangi Shorts tayyor!\n\n📌 {plan.title}\n🗂 {category}\n⏰ Joylash vaqti: {when}\n\n"
-            f"{plan.description[:600]}\n\nVideo qo'yilsinmi?"
-        )
-        buttons = self.bot.buttons([
-            [("✅ Ha, joylash", f"v:ok:{pid}"), ("❌ Yo'q", f"v:no:{pid}")],
-            [("🔄 Boshqa video yarat", f"v:new:{pid}")],
-        ])
-        self.bot.send_video(video, caption, buttons, thumb)
+        report = summarize_job(job)
+        video = job.path("render/video.mp4")
+        review = job.state == JobState.needs_review
+        allowed, reason = can_publish(job, owner_override=True)
+        if job.state == JobState.approved:
+            head, rows = "🎬 Yangi Shorts tayyor va sifat nazoratidan o'tdi!", [
+                [("✅ Ha, joylash", f"v:ok:{pid}"), ("❌ Yo'q", f"v:no:{pid}")],
+                [("🔄 Boshqa video yarat", f"v:new:{pid}")]]
+        elif review and allowed:
+            head, rows = "🟡 Video sifat nazoratidan to'liq o'tmadi - o'zingiz ko'rib chiqing.", [
+                [("✅ Ko'rdim, baribir joylash", f"v:ok:{pid}"), ("❌ Yo'q", f"v:no:{pid}")],
+                [("🔄 Boshqa video yarat", f"v:new:{pid}")]]
+        else:
+            head, rows = f"🔴 Bu videoni nashr qilib bo'lmaydi: {reason}", [
+                [("🔄 Boshqa video yarat", f"v:new:{pid}"), ("❌ Bekor qilish", f"v:no:{pid}")]]
+        self.state.update_pending(pid, kind="video", job_id=job.id, category=category, review=review,
+                                  slot=slot.isoformat() if slot else None)
+        caption = f"{head}\n\n{report}\n⏰ Joylash: {when} ({self.cfg.youtube_privacy})"
+        if video.exists():
+            thumb = extract_frames(video, job.path("render"), count=1, width=720, prefix="thumb")[0]
+            self.bot.send_video(video, caption, self.bot.buttons(rows), thumb)
+        else:
+            self.bot.send(caption, self.bot.buttons(rows))
 
     def upload_video(self, pid: str) -> None:
         item = self.state["pending"].get(pid)
         if not item:
             return
-        plan = VideoPlan.model_validate(item["plan"])
+        job = Job.load(self.cfg.jobs_dir, item["job_id"])
         slot = datetime.fromisoformat(item["slot"]) if item.get("slot") else None
-        self.bot.send(f"⬆️ «{plan.title}» YouTube'ga yuklanmoqda...")
-        video_id = self.youtube.upload(
-            video=Path(item["video"]), thumb=None,  # Shorts muqovasini YouTube o'zi tanlaydi
-            title=plan.title, description=plan.description, tags=plan.tags,
-            category_id=self.cfg.youtube_category_id, publish_at=slot,
-        )
-        self.state["published_titles"] = [*self.state["published_titles"][-200:], plan.title]
+        title = job.read_json("plan.json")["title"]
+        self.bot.send(f"⬆️ «{title}» YouTube'ga yuklanmoqda ({self.cfg.youtube_privacy})...")
+        result = publish(job, self.youtube, self.db, self.cfg.youtube_category_id, self.cfg.youtube_privacy,
+                         slot, owner_override=bool(item.get("review")))
+        self.state["published_titles"] = [*self.state["published_titles"][-200:], title]
         self.state.pop_pending(pid)
-        shutil.rmtree(Path(item["video"]).parent, ignore_errors=True)
-        when = f"{slot:%d.%m %H:%M} da avtomatik ochiladi" if slot and slot > self.now() else "hozir ochiq"
-        self.bot.send(f"✅ Yuklandi ({when}):\nhttps://youtu.be/{video_id}")
+        st = result["youtube_status"]
+        self.bot.send(f"✅ Yuklandi: {result['url']}\nHolat: {st.get('privacyStatus')} / {st.get('uploadStatus')}"
+                      + (f"\nOchilish vaqti: {st.get('publishAt')}" if st.get("publishAt") else ""))
 
     # --------------------------------------------------------------- kommentlar
     def check_comments(self) -> None:
@@ -122,7 +140,7 @@ class Agent:
             if c["thread_id"] in self.state["seen_comments"] or c["thread_id"] in asked:
                 continue
             title = self.youtube.video_title(c["video_id"])
-            draft = self.creator.draft_comment_reply(title, c["text"], c["author"])
+            draft = draft_comment_reply(self.llm, title, c["text"], c["author"])
             if not draft.should_reply:
                 self.state.mark_comment_seen(c["thread_id"])
                 log.info("Komment o'tkazib yuborildi (%s): %s", draft.reason, c["text"][:80])
@@ -185,13 +203,13 @@ class Agent:
                 self.state.update_pending(pid, status="approved")
                 self.submit(self.upload_video, pid)
             elif action == "no":
-                self.bot.remove_buttons(cq["message"], "🚫 Bekor qilindi. Bu video joylanmaydi.")
+                self.bot.remove_buttons(cq["message"], "🚫 Bekor qilindi. Bu video joylanmaydi (fayllari saqlanadi).")
                 self.state.pop_pending(pid)
-                shutil.rmtree(Path(item["video"]).parent, ignore_errors=True)
+                self._reject(item["job_id"])
             elif action == "new":
                 self.bot.remove_buttons(cq["message"], "🔄 Yangi video tayyorlanadi.")
                 self.state.pop_pending(pid)
-                shutil.rmtree(Path(item["video"]).parent, ignore_errors=True)
+                self._reject(item["job_id"])
                 slot = datetime.fromisoformat(item["slot"]) if item.get("slot") else None
                 self.submit(self.prepare_video, slot, item["category"])
         elif kind == "c":
@@ -205,6 +223,18 @@ class Agent:
                 self.bot.remove_buttons(cq["message"], "⏭ O'tkazib yuborildi.")
                 self.state.pop_pending(pid)
                 self.state.mark_comment_seen(item["thread_id"])
+
+    def _reject(self, job_id: str) -> None:
+        try:
+            job = Job.load(self.cfg.jobs_dir, job_id)
+            if job.state != JobState.published:
+                job.set_state(JobState.rejected, "egasi Telegram'da rad etdi")
+        except FileNotFoundError:
+            pass
+
+    def update_analytics(self) -> None:
+        n = snapshot_all(self.db, self.youtube.creds)
+        self.bot.send(f"📈 {n} ta video statistikasi yangilandi.\n\n{summary(self.db) or 'Hali yetarli maʼlumot yoʻq.'}")
 
     def handle_message(self, text: str) -> None:
         text = text.strip()
@@ -221,6 +251,8 @@ class Agent:
                 "/status - jadval va kutilayotgan so'rovlar\n"
                 "/video - hoziroq yangi video tayyorlash\n"
                 "/comments - kommentlarni hozir tekshirish\n"
+                "/jobs - oxirgi ishlar va ularning holati\n"
+                "/analytics - YouTube statistikasini yangilash\n"
                 "/cancel - tahrirni bekor qilish"
             )
         elif text == "/status":
@@ -233,6 +265,12 @@ class Agent:
             self.submit(self.prepare_video, None)
         elif text == "/comments":
             self.submit(self.check_comments)
+        elif text == "/jobs":
+            ids = Job.list_ids(self.cfg.jobs_dir)[-8:]
+            lines = [f"• {i}: {Job.load(self.cfg.jobs_dir, i).state.value}" for i in ids]
+            self.bot.send("\n".join(lines) or "Hali ish yo'q.")
+        elif text == "/analytics":
+            self.submit(self.update_analytics)
 
     # -------------------------------------------------------------------- loop
     def run(self) -> None:

@@ -1,0 +1,50 @@
+{
+  "approved": true,
+  "attempt": 1,
+  "technical_errors": [],
+  "factual_errors": [],
+  "audio_issues": [],
+  "visual_mismatch_issues": [],
+  "subtitle_issues": [],
+  "license_warnings": [],
+  "scores": {
+    "storytelling": 8.5,
+    "visual_relevance": 8.5,
+    "audio_quality": 10.0,
+    "subtitle_quality": 8.5,
+    "technical_quality": 10.0
+  },
+  "scene_ids_to_fix": [],
+  "recommended_fixes": [],
+  "route_to": "none",
+  "metrics": {
+    "duration": 29.67,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30.0,
+    "vcodec": "h264",
+    "acodec": "aac",
+    "pix_fmt": "yuv420p",
+    "size_mb": 25.71,
+    "video_stream": 29.67,
+    "audio_stream": 29.66,
+    "lufs": -13.03,
+    "true_peak": -10.62,
+    "peak_db": -10.650016,
+    "long_silences": [],
+    "timing_source": "tts",
+    "asr_similarity": null,
+    "tts": "fake:fake-voice",
+    "subtitle_events": 25,
+    "asset_types": {
+      "graphic": 2,
+      "image": 1,
+      "video": 2
+    }
+  },
+  "notes": [
+    "AI tekshiruvchi: test review",
+    "audio_quality - o'lchovlar va nutqni tanish asosidagi taxmin; quloq bilan eshitishning o'rnini bosmaydi"
+  ],
+  "created_at": "2026-10-11T19:15:53+00:00"
+}
