@@ -144,7 +144,7 @@ class ImageFinder:
         attempts = []
         if image_source == "source_article":
             attempts.append(("manba", lambda: self.source_article(out)))
-        if self.category == "Koinot":
+        if self.category in ("Koinot", "Ilm-fan"):
             attempts.append(("nasa", lambda: self.nasa(query, out)))
         attempts.append(("wikimedia", lambda: self.wikimedia(query, out)))
         if image_source != "source_article":

@@ -50,12 +50,13 @@ class ContentRefused(RuntimeError):
 CATEGORY_SOURCES: dict[str, list[str]] = {
     "Sun'iy intellekt": ["anthropic.com", "openai.com", "deepmind.google", "blog.google", "x.ai",
                          "mistral.ai", "nvidia.com", "nvidianews.nvidia.com", "ai.meta.com"],
-    "Koinot": ["nasa.gov", "esa.int", "spacex.com", "blueorigin.com", "uzspace.uz", "gov.uz",
-               "jpl.nasa.gov", "science.nasa.gov", "webbtelescope.org"],
-    "Tibbiyot": ["who.int", "nih.gov", "cdc.gov", "fda.gov", "nejm.org", "thelancet.com", "nature.com",
-                 "bmj.com", "mayoclinic.org", "ssv.uz"],
+    "Yangi texnologiyalar": ["apple.com", "news.samsung.com", "blog.google", "news.microsoft.com", "nvidianews.nvidia.com",
+                             "theverge.com", "techcrunch.com", "engadget.com", "arstechnica.com", "wired.com"],
+    "Yangi mashinalar": ["tesla.com", "byd.com", "global.toyota", "group.mercedes-benz.com", "press.bmwgroup.com",
+                         "hyundainews.com", "uzautomotors.com", "motor1.com", "caranddriver.com", "electrek.co"],
     "Ilm-fan": ["nature.com", "science.org", "home.cern", "mit.edu", "caltech.edu", "max-planck.de",
                 "newscientist.com", "scientificamerican.com", "phys.org"],
+    "Ta'lim": ["uzedu.uz", "edu.uz", "gov.uz", "uza.uz", "kun.uz", "daryo.uz", "gazeta.uz", "unesco.org"],
 }
 
 
@@ -71,8 +72,8 @@ def research_prompt(category: str, avoid_titles: list[str]) -> str:
     return (
         f"Sen viral YouTube Shorts kanali uchun yangilik ovchisisan. Soha: «{category}».\n"
         f"{where}"
-        "Veb-qidiruv orqali OXIRGI 1-3 HAFTADAGI eng hayratlanarli BITTA yangilikni top: yangi model yoki "
-        "mahsulot, kosmik missiya natijasi, rekord, g'aroyib kashfiyot, muhim tibbiy yutuq. Oddiy odam "
+        "Veb-qidiruv orqali OXIRGI 1-3 HAFTADAGI eng hayratlanarli BITTA yangilikni top: yangi AI model, "
+        "yangi gadjet yoki texnologiya, yangi avtomobil, ilmiy kashfiyot, maktab va ta'limdagi muhim o'zgarish. Oddiy odam "
         "do'stiga aytib beradigan, raqamlari kuchli mavzu bo'lsin.\n"
         f"Avval chiqqan videolar (takrorlama):\n{avoid}\n\n"
         "Natija: yangilik nima, kim e'lon qildi, nega hayratlanarli, 5-8 ta aniq raqam/fakt va ularni "
@@ -104,7 +105,9 @@ def script_prompt(language: str, category: str, research_notes: str) -> str:
         "- Qisqartmalarni ochib yoz yoki o'qilishicha yoz: 'NASA' -> 'NASA' (so'z sifatida o'qiladi), "
         "'mRNK' -> 'informatsion RNK', 'km' -> 'kilometr'.\n"
         "- O'zbek lotin imlosi: o' va g' harflari, tutuq belgisi (ma'lumot). Qavslar, tire, belgilar YO'Q.\n"
-        "- Qisqa gaplar (12 so'zdan kam), har gapda bitta fikr - ovoz tabiiyroq chiqadi.\n"
+        "- Butun matn YAXLIT hikoya bo'lib oqsin: har sahna oldingisining davomi, gaplar 'va', 'chunki', "
+        "'shuning uchun', 'endi esa' kabi so'zlar bilan ulansin. Juda qisqa uzuq-yuluq gaplar va har gapda "
+        "undov belgisi YO'Q - tirik odam do'stiga hikoya qilayotgandek gapir.\n"
         "- RASMLAR faqat shu mavzuga oid bo'lsin: image_query - aynan sahnadagi obyekt (sayyora nomi, "
         "teleskop, kompaniya mahsuloti, kasallik/dori nomi), umumiy so'zlar ('technology', 'people') YO'Q. "
         "Yangilikning o'zi haqidagi sahnalarda image_source=source_article.\n"

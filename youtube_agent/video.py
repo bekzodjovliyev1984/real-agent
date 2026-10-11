@@ -107,7 +107,6 @@ class VideoMaker:
         return words
 
     def synthesize(self, text: str, out: Path) -> list[Word]:
-        text = prepare_speech(text)  # raqamlar so'z bilan, oʻ/gʻ, ortiqcha belgilarsiz
         words = asyncio.run(self._tts(text, out))
         if not words:  # ovoz so'z vaqtlarini bermasa - uzunligiga qarab taqsimlaymiz
             tokens = text.split()
@@ -186,8 +185,9 @@ class VideoMaker:
             x += cw + spacing
         img.save(out)
 
-    def _segment(self, bg: Path, text: Path, audio: Path, dur: float, out: Path) -> None:
-        frames = int(dur * FPS) + 2
+    def _segment(self, bg: Path, text: Path, dur: float, out: Path) -> None:
+        """Bitta sahnaning ovozsiz videosi (ovoz butun video uchun bitta bo'lib keyin qo'shiladi)."""
+        frames = round(dur * FPS)
         flt = (
             f"[0:v]zoompan=z='1+0.07*on/{frames}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
             f":d=1:s={W}x{H}:fps={FPS},setsar=1[bg];"
@@ -196,9 +196,21 @@ class VideoMaker:
         )
         _ffmpeg("-loop", "1", "-framerate", str(FPS), "-i", str(bg),
                 "-loop", "1", "-framerate", str(FPS), "-i", str(text),
-                "-i", str(audio), "-t", f"{dur:.2f}", "-filter_complex", flt, "-af", "apad",
-                "-map", "[v]", "-map", "2:a", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2", str(out))
+                "-filter_complex", flt, "-map", "[v]", "-frames:v", str(frames),
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(out))
+
+    @staticmethod
+    def scene_bounds(scene_texts: list[str], words: list[Word], total: float) -> list[float]:
+        """Har sahna qachon boshlanishini topadi: yaxlit ovozdagi so'zlarni sahnalarga taqsimlaydi."""
+        counts = [len(re.findall(r"[^\W_]+(?:[ʻʼ‘’'-][^\W_]+)*", t)) for t in scene_texts]
+        scale = len(words) / max(sum(counts), 1)  # so'z soni biroz farq qilsa ham moslashadi
+        bounds, seen = [0.0], 0.0
+        for c in counts[:-1]:
+            seen += c * scale
+            idx = min(int(round(seen)), len(words) - 1)
+            bounds.append(max(bounds[-1] + 0.5, words[idx].start - 0.08) if words else bounds[-1] + total / len(counts))
+        bounds.append(total)
+        return bounds
 
     # ------------------------------------------------------------ subtitrlar
     def _write_ass(self, words: list[Word], font_name: str, out: Path) -> None:
@@ -234,13 +246,18 @@ class VideoMaker:
         """Shorts videoni yasaydi, (video_path, muqova_path) qaytaradi. Rasm mualliflari tavsifga qo'shiladi."""
         workdir.mkdir(parents=True, exist_ok=True)
         finder = ImageFinder(category, plan.sources, self.s.pixabay_key, self.s.ai_images, self.s.stock_fallback)
-        segments, all_words, offset = [], [], 0.0
+        # 1) butun matnni BITTA yaxlit ovoz qilib o'qitamiz - gaplar orasida sun'iy to'xtashlar bo'lmaydi
+        scene_texts = [prepare_speech(sc.narration) for sc in plan.scenes]
+        narration = workdir / "narration.mp3"
+        all_words = self.synthesize(" ".join(scene_texts), narration)
+        total = _duration(narration) + 0.4
+        bounds = self.scene_bounds(scene_texts, all_words, total)
+
+        # 2) har sahna uchun rasm va yozuvlar, davomiyligi ovozdagi o'z gaplariga teng
+        segments: list[Path] = []
         last_image: Path | None = None
         for i, scene in enumerate(plan.scenes):
             log.info("Sahna %d/%d: %s", i + 1, len(plan.scenes), scene.headline)
-            audio = workdir / f"s{i:02d}.mp3"
-            words = self.synthesize(scene.narration, audio)
-            dur = _duration(audio) + 0.12
             found = finder.find(scene.image_source, scene.image_query, scene.image_prompt, workdir / f"img{i:02d}")
             image = found.path if found else last_image  # topilmasa oldingi sahna rasmi davom etadi
             last_image = image or last_image
@@ -248,14 +265,11 @@ class VideoMaker:
             bg, text, seg = workdir / f"bg{i:02d}.jpg", workdir / f"tx{i:02d}.png", workdir / f"s{i:02d}.mp4"
             self.render_background(image, accent, bg)
             self.render_text(scene.headline, scene.subline, accent, text)
-            self._segment(bg, text, audio, dur, seg)
-            all_words += [Word(w.start + offset, w.end + offset, w.text) for w in words]
-            offset += _duration(seg)
+            self._segment(bg, text, bounds[i + 1] - bounds[i], seg)
             segments.append(seg)
 
         (workdir / "concat.txt").write_text("".join(f"file '{s.name}'\n" for s in segments), encoding="utf-8")
         _ffmpeg("-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", "joined.mp4", cwd=workdir)
-        total = _duration(workdir / "joined.mp4")
 
         fonts = workdir / "fonts"  # libass shriftni shu papkadan topadi
         fonts.mkdir(exist_ok=True)
@@ -268,17 +282,19 @@ class VideoMaker:
             font_name = "Arial"
         self._write_ass(all_words, font_name, workdir / "captions.ass")
 
-        vf = ("ass=captions.ass:fontsdir=fonts,"
+        vf = ("tpad=stop_mode=clone:stop_duration=2,ass=captions.ass:fontsdir=fonts,"
               "drawbox=x=40:y=1896:w=1000:h=6:color=white@0.25:t=fill,"
               f"drawbox=x=40:y=1896:w='1000*t/{total:.2f}':h=6:color=0xE8204F:t=fill")
         music = sorted(Path(self.s.music_dir).glob("*.mp3")) if self.s.music_dir and Path(self.s.music_dir).is_dir() else []
-        args = ["-i", "joined.mp4"]
+        args = ["-i", "joined.mp4", "-i", "narration.mp3"]
         if music:
             args += ["-stream_loop", "-1", "-i", str(Path(random.choice(music)).resolve()),
-                     "-filter_complex", "[1:a]volume=0.12[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]",
+                     "-filter_complex", "[2:a]volume=0.12[m];[1:a]apad[n];[n][m]amix=inputs=2:duration=first:normalize=0[a]",
                      "-map", "0:v", "-map", "[a]"]
-        args += ["-vf", vf, "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
-                 "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "video.mp4"]
+        else:
+            args += ["-af", "apad", "-map", "0:v", "-map", "1:a"]
+        args += ["-vf", vf, "-t", f"{total:.2f}", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "video.mp4"]
         _ffmpeg(*args, cwd=workdir)
 
         _ffmpeg("-ss", "0.6", "-i", "video.mp4", "-frames:v", "1", "-q:v", "3", "thumbnail.jpg", cwd=workdir)

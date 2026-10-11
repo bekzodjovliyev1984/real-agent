@@ -2,11 +2,13 @@
 
 Bu agent **YouTube Shorts** kanalini avtomatik yuritadi: har safar eng so'nggi, hayratlanarli yangilikni topib, 35–50 soniyalik vertikal video qiladi.
 
-- **Mavzular:** Koinot, Sun'iy intellekt, Tibbiyot, Ilm-fan (navbat bilan almashadi).
+- **Mavzular:** Sun'iy intellekt, Yangi texnologiyalar, Yangi mashinalar, Ilm-fan, Ta'lim (maktab) — navbat bilan.
 - **Faqat rasmiy manbalar:** AI yangiliklari Anthropic, OpenAI, Google DeepMind, xAI, Mistral AI, NVIDIA
-  saytlaridan; koinot yangiliklari NASA, ESA, SpaceX, Blue Origin, O'zbekkosmos saytlaridan; tibbiyot WHO, NIH,
-  NEJM, Lancet va boshqalardan olinadi. Rasmlar ham shu mavzuga oid: yangilik sahifasining asosiy rasmi,
-  NASA rasm arxivi, Wikimedia Commons. Mavzuga aloqasiz stok-kadrlar ishlatilmaydi.
+  saytlaridan; mashinalar Tesla, BYD, Toyota, Mercedes-Benz, BMW, UzAuto Motors va avto-nashrlardan;
+  ta'lim uzedu.uz, edu.uz, gov.uz va O'zbekiston nashrlaridan olinadi. Rasmlar ham shu mavzuga oid:
+  yangilik sahifasining asosiy rasmi, Wikimedia Commons. Mavzuga aloqasiz stok-kadrlar ishlatilmaydi.
+- **Tabiiy ovoz:** butun matn bitta yaxlit ovoz bo'lib o'qiladi (gaplar orasida sun'iy to'xtashlarsiz),
+  raqamlar so'z bilan, oʻ/gʻ to'g'ri yoziladi.
 - **Jadval:** Dushanba, Seshanba, Payshanba, Shanba — soat **19:00** (Toshkent vaqti).
 - **O'zi tayyorlaydi:** sun'iy intellekt (Claude yoki OpenAI) oxirgi haftalardagi eng qiziq yangilikni topadi → kuchli "hook" bilan qisqa ssenariy yozadi → har sahnaga katta raqam/kalit so'z va mavzuga oid rasm qo'yadi → diktor ovozi, so'zma-so'z yonadigan subtitr, progress chizig'i va fon musiqasi bilan 1080×1920 Shorts yasaydi.
 - **Telegram orqali ruxsat so'raydi:** joylashdan ~3 soat oldin videoni sizga yuboradi:
@@ -131,7 +133,7 @@ docker run -d --restart=always --env-file .env \
 | `PUBLISH_TIME` | `19:00` | Joylash vaqti |
 | `TIMEZONE` | `Asia/Tashkent` | Vaqt mintaqasi |
 | `PREPARE_HOURS_BEFORE` | `3` | Video necha soat oldin tayyorlanib, sizga yuboriladi |
-| `TOPICS` | `Koinot,Sun'iy intellekt,Tibbiyot,Ilm-fan` | Mavzular navbati |
+| `TOPICS` | `Sun'iy intellekt,Yangi texnologiyalar,Yangi mashinalar,Ilm-fan,Ta'lim` | Mavzular navbati |
 | `VIDEO_LANGUAGE` | `o'zbek` | Ssenariy tili |
 | `TTS_VOICE` | `uz-UZ-SardorNeural` | Diktor ovozi (`uz-UZ-MadinaNeural` — ayol ovozi; ruscha: `ru-RU-DmitryNeural`) |
 | `COMMENT_CHECK_MINUTES` | `30` | Kommentlarni tekshirish oralig'i |
