@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 from .content import VideoPlan
 from .images import ImageFinder
+from .speech import prepare_speech
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ def _ass_time(t: float) -> str:
 
 
 def _ass_escape(text: str) -> str:
+    text = text.replace("ʻ", "‘").replace("ʼ", "’")  # har qanday shriftda bor belgilar
     return text.replace("\\", "").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
@@ -105,6 +107,7 @@ class VideoMaker:
         return words
 
     def synthesize(self, text: str, out: Path) -> list[Word]:
+        text = prepare_speech(text)  # raqamlar so'z bilan, oʻ/gʻ, ortiqcha belgilarsiz
         words = asyncio.run(self._tts(text, out))
         if not words:  # ovoz so'z vaqtlarini bermasa - uzunligiga qarab taqsimlaymiz
             tokens = text.split()

@@ -15,7 +15,8 @@ log = logging.getLogger(__name__)
 
 
 class Scene(BaseModel):
-    narration: str = Field(description="Diktor matni: 1-2 qisqa, jonli gap (8-22 so'z)")
+    narration: str = Field(description="Diktor o'qiydigan matn: 1-2 qisqa, jonli gap (8-22 so'z), OVOZGA MOS yozilgan "
+                                       "(raqamlar so'z bilan, chet el nomlari o'zbekcha talaffuzda, qisqartmalarsiz)")
     headline: str = Field(description="Ekran tepasidagi KATTA yozuv: raqam+birlik yoki kalit so'z, 1-3 so'z (masalan: '8 DAQIQA', '4,3 MLN QUYOSH', 'GPT-6', '1-BEKAT')")
     subline: str = Field(description="Katta yozuv tagidagi kichik izoh, 2-5 so'z (masalan: 'QUYOSH - YER · YORUG'LIK')")
     accent: Literal["orange", "cyan", "white", "yellow"] = Field(description="Katta yozuv rangi")
@@ -94,6 +95,16 @@ def script_prompt(language: str, category: str, research_notes: str) -> str:
         "- Viktorina, test savollari, quruq ro'yxatlar YO'Q. Maxsus belgilar (⊕, ±, Å, ~) YO'Q.\n"
         "- Oxirgi sahna: kuchli xulosa + 'Obuna bo'ling!'.\n"
         "- Faqat tadqiqotdagi faktlar, o'ylab topma.\n"
+        "DIKTOR MATNI (narration) - uni o'zbek ovoz dasturi o'qiydi, shuning uchun:\n"
+        "- Sof, tabiiy o'zbek adabiy tili; rus/ingliz tilidan so'zma-so'z tarjimaga o'xshagan iboralar YO'Q.\n"
+        "- Raqamlarni SO'Z bilan yoz: 'to'rt million uch yuz ming', 'ming to'qqiz yuz yetmish yettinchi yilda', "
+        "'sakkiz daqiqa'. Raqam belgisi (4,3 / 1977 / 25%) YO'Q - ular faqat headline'da.\n"
+        "- Chet el nomlarini o'zbekcha o'qilishicha yoz: 'Jeyms Uebb teleskopi', 'Sagittarius' -> 'Sagittarius A yulduzi', "
+        "'OpenAI' -> 'Open Ey Ay', 'NVIDIA' -> 'Nvidia', 'SpaceX' -> 'Speys Iks', 'GPT' -> 'Ji Pi Ti'.\n"
+        "- Qisqartmalarni ochib yoz yoki o'qilishicha yoz: 'NASA' -> 'NASA' (so'z sifatida o'qiladi), "
+        "'mRNK' -> 'informatsion RNK', 'km' -> 'kilometr'.\n"
+        "- O'zbek lotin imlosi: o' va g' harflari, tutuq belgisi (ma'lumot). Qavslar, tire, belgilar YO'Q.\n"
+        "- Qisqa gaplar (12 so'zdan kam), har gapda bitta fikr - ovoz tabiiyroq chiqadi.\n"
         "- RASMLAR faqat shu mavzuga oid bo'lsin: image_query - aynan sahnadagi obyekt (sayyora nomi, "
         "teleskop, kompaniya mahsuloti, kasallik/dori nomi), umumiy so'zlar ('technology', 'people') YO'Q. "
         "Yangilikning o'zi haqidagi sahnalarda image_source=source_article.\n"
