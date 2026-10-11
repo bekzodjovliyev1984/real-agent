@@ -1,13 +1,12 @@
-"""Ssenariydan vertikal YouTube Shorts yasash.
+"""Ssenariydan vertikal YouTube Shorts yasash (ilmiy-yangilik uslubi).
 
-Har sahna: stok-video (Pexels) yoki rasm + diktor ovozi (edge-tts).
-Ustiga so'zma-so'z yonadigan katta subtitrlar (ASS/libass), tepada hook yozuvi, ixtiyoriy fon musiqasi.
+Har sahna: qora fon + o'rtada mavzuga oid rasm (sekin yaqinlashadi), tepada katta rangli raqam/kalit so'z
+va kichik izoh, pastda so'zma-so'z yonadigan subtitr, eng pastda progress chizig'i. Ovoz: edge-tts.
 """
 
 from __future__ import annotations
 
 import asyncio
-import base64
 import logging
 import random
 import re
@@ -17,20 +16,23 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import edge_tts
-import httpx
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 from .content import VideoPlan
+from .images import ImageFinder
 
 log = logging.getLogger(__name__)
 
 W, H, FPS = 1080, 1920, 30
-THEMES = {  # rasm topilmasa fon ranglari
-    "Tibbiyot": ((10, 60, 90), (5, 20, 35)),
-    "Ilm-fan": ((40, 20, 90), (10, 5, 30)),
-    "Sun'iy intellekt": ((15, 25, 60), (0, 0, 10)),
-    "Qiziqarli faktlar": ((90, 30, 40), (25, 5, 10)),
+ZOOM_W, ZOOM_H = 1296, 2304  # fon 1.2x kattaroq chiziladi, zoompan kichraytiradi
+ACCENTS = {
+    "orange": (255, 168, 76),
+    "cyan": (110, 200, 255),
+    "white": (255, 255, 255),
+    "yellow": (255, 214, 90),
 }
+SUB_COLOR = (110, 200, 255)
+HIGHLIGHT_ASS = "&H00FFC86E&"  # subtitrdagi joriy so'z (moviy), ASS formatida BGR
 
 
 @dataclass
@@ -46,10 +48,11 @@ class ShortsSettings:
     tts_rate: str
     font_path: str
     font_bold_path: str
-    pexels_key: str = ""
+    headline_font_path: str
     pixabay_key: str = ""
     music_dir: str = ""
     ai_images: bool = False
+    stock_fallback: bool = False
 
 
 # ------------------------------------------------------------------ yordamchilar
@@ -76,125 +79,19 @@ def _ass_escape(text: str) -> str:
     return text.replace("\\", "").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
-# ------------------------------------------------------------------- vizuallar
-class Visuals:
-    """Sahna uchun fon: Pexels/Pixabay video -> Pexels/Pixabay rasm -> AI rasm -> rangli fon."""
-
-    def __init__(self, settings: ShortsSettings):
-        self.s = settings
-        self.http = httpx.Client(timeout=60, follow_redirects=True)
-        self.used: set[int] = set()
-
-    def _pexels(self, url: str, query: str) -> dict:
-        resp = self.http.get(url, params={"query": query, "orientation": "portrait", "per_page": 10},
-                             headers={"Authorization": self.s.pexels_key})
-        resp.raise_for_status()
-        return resp.json()
-
-    def _download(self, url: str, out: Path) -> Path:
-        with self.http.stream("GET", url) as r:
-            r.raise_for_status()
-            with open(out, "wb") as f:
-                for chunk in r.iter_bytes(1 << 16):
-                    f.write(chunk)
-        return out
-
-    def pexels_video(self, query: str, out: Path) -> Path | None:
-        for v in self._pexels("https://api.pexels.com/videos/search", query).get("videos", []):
-            if v["id"] in self.used or v.get("width", 0) > v.get("height", 1):
-                continue
-            files = [f for f in v.get("video_files", [])
-                     if f.get("height") and f["height"] >= 1280 and f["height"] >= f.get("width", 0)]
-            if not files:
-                continue
-            best = min(files, key=lambda f: abs(f["height"] - 1920))
-            self.used.add(v["id"])
-            return self._download(best["link"], out)
-        return None
-
-    def pexels_photo(self, query: str, out: Path) -> Path | None:
-        for p in self._pexels("https://api.pexels.com/v1/search", query).get("photos", []):
-            if p["id"] in self.used:
-                continue
-            self.used.add(p["id"])
-            return self._download(p["src"].get("large2x") or p["src"]["original"], out)
-        return None
-
-    def _pixabay(self, url: str, query: str, **extra) -> list[dict]:
-        resp = self.http.get(url, params={"key": self.s.pixabay_key, "q": query[:100], "safesearch": "true",
-                                          "per_page": 20, **extra})
-        resp.raise_for_status()
-        return resp.json().get("hits", [])
-
-    def pixabay_video(self, query: str, out: Path) -> Path | None:
-        candidates = []
-        for hit in self._pixabay("https://pixabay.com/api/videos/", query):
-            if hit["id"] in self.used:
-                continue
-            files = [f for f in hit.get("videos", {}).values() if f.get("url") and f.get("height", 0) >= 720]
-            if files:
-                best = min(files, key=lambda f: abs(f["height"] - 1920) if f["height"] >= f["width"] else abs(f["height"] - 1080))
-                vertical = best["height"] >= best["width"]
-                candidates.append((not vertical, hit["id"], best["url"]))  # vertikal videolar birinchi
-        if not candidates:
-            return None
-        _, vid, url = sorted(candidates, key=lambda c: c[0])[0]
-        self.used.add(vid)
-        return self._download(url, out)
-
-    def pixabay_photo(self, query: str, out: Path) -> Path | None:
-        for hit in self._pixabay("https://pixabay.com/api/", query, image_type="photo", orientation="vertical"):
-            if hit["id"] in self.used:
-                continue
-            self.used.add(hit["id"])
-            return self._download(hit["largeImageURL"], out)
-        return None
-
-    def ai_image(self, prompt: str, out: Path) -> Path | None:
-        from openai import OpenAI
-
-        resp = OpenAI().images.generate(model="gpt-image-1", prompt=f"{prompt}. Vertical, cinematic, no text.",
-                                        size="1024x1536")
-        out.write_bytes(base64.b64decode(resp.data[0].b64_json))
-        return out
-
-    def fallback(self, category: str, out: Path) -> Path:
-        top, bottom = THEMES.get(category, ((30, 40, 70), (5, 5, 15)))
-        img = Image.new("RGB", (W, H))
-        draw = ImageDraw.Draw(img)
-        for y in range(H):
-            t = y / H
-            draw.line([(0, y), (W, y)], fill=tuple(int(top[i] * (1 - t) + bottom[i] * t) for i in range(3)))
-        img.save(out)
-        return out
-
-    def get(self, query: str, image_prompt: str, category: str, base: Path) -> tuple[Path, bool]:
-        """(fayl, video_mi) qaytaradi."""
-        attempts = []
-        if self.s.pexels_key:
-            attempts += [(self.pexels_video, query, base.with_suffix(".mp4"), True),
-                         (self.pexels_photo, query, base.with_suffix(".jpg"), False)]
-        if self.s.pixabay_key:
-            attempts += [(self.pixabay_video, query, base.with_suffix(".mp4"), True),
-                         (self.pixabay_photo, query, base.with_suffix(".jpg"), False)]
-        if self.s.ai_images:
-            attempts.append((self.ai_image, image_prompt, base.with_suffix(".png"), False))
-        for fn, arg, out, is_video in attempts:
-            try:
-                path = fn(arg, out)
-                if path:
-                    return path, is_video
-            except Exception as e:
-                log.warning("Vizual topilmadi (%s, %s): %s", fn.__name__, arg, e)
-        return self.fallback(category, base.with_suffix(".png")), False
-
-
-# ------------------------------------------------------------------- yasovchi
 class VideoMaker:
     def __init__(self, settings: ShortsSettings):
         self.s = settings
-        self.visuals = Visuals(settings)
 
+    def _font(self, path: str, size: int) -> ImageFont.FreeTypeFont:
+        for p in (path, self.s.font_bold_path):
+            try:
+                return ImageFont.truetype(p, size)
+            except OSError:
+                continue
+        return ImageFont.load_default(size)
+
+    # ------------------------------------------------------------------ ovoz
     async def _tts(self, text: str, out: Path) -> list[Word]:
         comm = edge_tts.Communicate(text, self.s.voice, rate=self.s.tts_rate, boundary="WordBoundary")
         words: list[Word] = []
@@ -220,39 +117,101 @@ class VideoMaker:
                 t += d
         return words
 
-    def _segment(self, visual: Path, is_video: bool, audio: Path, dur: float, out: Path) -> None:
-        frames = int(dur * FPS) + 1
-        if is_video:
-            vin = ["-stream_loop", "-1", "-i", str(visual)]
-            vf = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS},setsar=1"
-        else:  # rasm: sekin yaqinlashish (Ken Burns)
-            vin = ["-i", str(visual)]
-            vf = (f"scale={W * 2}:{H * 2}:force_original_aspect_ratio=increase,crop={W * 2}:{H * 2},"
-                  f"zoompan=z='min(zoom+0.0009,1.18)':d={frames}:s={W}x{H}:fps={FPS}"
-                  ":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)',setsar=1")
-        _ffmpeg(*vin, "-i", str(audio), "-t", f"{dur:.2f}", "-vf", vf, "-af", "apad",
-                "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2", str(out))
+    # --------------------------------------------------------------- tasvir
+    @staticmethod
+    def render_background(image: Path | None, accent: tuple[int, int, int], out: Path) -> None:
+        """Qora fon, xira kattalashtirilgan rasm, o'rtada chetlari silliq so'nadigan asosiy rasm."""
+        canvas = Image.new("RGB", (ZOOM_W, ZOOM_H), (0, 0, 0))
+        if image:
+            src = Image.open(image).convert("RGB")
+            # orqa fon: ekranni to'ldiradi, xira va qorong'i
+            scale = max(ZOOM_W / src.width, ZOOM_H / src.height)
+            bg = src.resize((int(src.width * scale) + 1, int(src.height * scale) + 1))
+            left, top = (bg.width - ZOOM_W) // 2, (bg.height - ZOOM_H) // 2
+            bg = bg.crop((left, top, left + ZOOM_W, top + ZOOM_H)).filter(ImageFilter.GaussianBlur(40))
+            canvas = ImageEnhance.Brightness(bg).enhance(0.28)
+            # asosiy rasm: kenglik bo'ylab, markazda
+            box_w, box_h = int(ZOOM_W * 0.98), int(ZOOM_H * 0.58)
+            scale = min(box_w / src.width, box_h / src.height)
+            fg = src.resize((int(src.width * scale), int(src.height * scale)))
+            mask = Image.new("L", fg.size, 0)
+            feather = max(12, int(min(fg.size) * 0.08))
+            ImageDraw.Draw(mask).rectangle([feather, feather, fg.width - feather, fg.height - feather], fill=255)
+            mask = mask.filter(ImageFilter.GaussianBlur(feather / 2))
+            canvas.paste(fg, ((ZOOM_W - fg.width) // 2, int(ZOOM_H * 0.53) - fg.height // 2), mask)
+        else:  # rasm yo'q: markazda xira rangli nur
+            glow = Image.new("RGB", (ZOOM_W, ZOOM_H), (0, 0, 0))
+            d = ImageDraw.Draw(glow)
+            cx, cy, r = ZOOM_W // 2, int(ZOOM_H * 0.53), int(ZOOM_W * 0.35)
+            d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=tuple(int(c * 0.35) for c in accent))
+            canvas = glow.filter(ImageFilter.GaussianBlur(160))
+        # matn o'qilishi uchun tepada va pastda qorong'i gradient
+        shade = Image.new("L", (1, ZOOM_H))
+        for y in range(ZOOM_H):
+            t = y / ZOOM_H
+            shade.putpixel((0, y), int(200 * max(0.0, 1 - t / 0.3) + 160 * max(0.0, (t - 0.75) / 0.25)))
+        canvas.paste((0, 0, 0), (0, 0, ZOOM_W, ZOOM_H), shade.resize((ZOOM_W, ZOOM_H)))
+        canvas.save(out, quality=93)
 
-    def _write_ass(self, words: list[Word], hook: str, font_name: str, out: Path) -> None:
+    def render_text(self, headline: str, subline: str, accent: tuple[int, int, int], out: Path) -> None:
+        """Tepada katta yozuv (masalan '8 DAQIQA') va uning tagida harflari keng izoh."""
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        headline = headline.upper().strip()
+        size = 150
+        font = self._font(self.s.headline_font_path, size)
+        while d.textlength(headline, font=font) > W - 110 and size > 60:
+            size -= 6
+            font = self._font(self.s.headline_font_path, size)
+        tw = d.textlength(headline, font=font)
+        y = 250
+        d.text(((W - tw) / 2 + 4, y + 5), headline, font=font, fill=(0, 0, 0, 160))
+        d.text(((W - tw) / 2, y), headline, font=font, fill=(*accent, 255))
+        # izoh: kichik, katta harflar, keng oraliq
+        sub = subline.upper().strip()
+        sfont = self._font(self.s.font_bold_path, 34)
+        spacing = 7
+        widths = [d.textlength(ch, font=sfont) for ch in sub]
+        total = sum(widths) + spacing * max(len(sub) - 1, 0)
+        while total > W - 120 and spacing > 1:
+            spacing -= 1
+            total = sum(widths) + spacing * max(len(sub) - 1, 0)
+        x, sy = (W - total) / 2, y + size + 28
+        sub_color = SUB_COLOR if accent == ACCENTS["white"] else accent
+        for ch, cw in zip(sub, widths):
+            d.text((x, sy), ch, font=sfont, fill=(*sub_color, 235))
+            x += cw + spacing
+        img.save(out)
+
+    def _segment(self, bg: Path, text: Path, audio: Path, dur: float, out: Path) -> None:
+        frames = int(dur * FPS) + 2
+        flt = (
+            f"[0:v]zoompan=z='1+0.07*on/{frames}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d=1:s={W}x{H}:fps={FPS},setsar=1[bg];"
+            "[1:v]format=rgba,fade=in:st=0:d=0.25:alpha=1[t];"
+            "[bg][t]overlay=0:0:format=auto,format=yuv420p[v]"
+        )
+        _ffmpeg("-loop", "1", "-framerate", str(FPS), "-i", str(bg),
+                "-loop", "1", "-framerate", str(FPS), "-i", str(text),
+                "-i", str(audio), "-t", f"{dur:.2f}", "-filter_complex", flt, "-af", "apad",
+                "-map", "[v]", "-map", "2:a", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2", str(out))
+
+    # ------------------------------------------------------------ subtitrlar
+    def _write_ass(self, words: list[Word], font_name: str, out: Path) -> None:
         header = (
             "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\n\n"
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
             "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, "
             "Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-            f"Style: Cap,{font_name},96,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,3,2,80,80,620,1\n"
-            f"Style: Hook,{font_name},82,&H00000000,&H00000000,&H0000E5FF,&H0000E5FF,-1,0,0,0,100,100,0,0,3,18,0,8,70,70,260,1\n\n"
+            f"Style: Cap,{font_name},66,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,4,2,2,90,90,560,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
         )
         lines = [header]
-        if hook:
-            lines.append(f"Dialogue: 1,{_ass_time(0)},{_ass_time(2.8)},Hook,,0,0,0,,"
-                         f"{{\\fad(150,250)}}{_ass_escape(hook.upper())}\n")
-        # so'zlarni 1-3 tadan guruhlaymiz, tinish belgisida bo'lamiz
         chunks, cur = [], []
-        for w in words:
+        for w in words:  # 1-2 so'zdan, tinish belgisida bo'linadi
             cur.append(w)
-            if len(cur) == 3 or re.search(r"[.!?,:;]$", w.text):
+            if len(cur) == 2 or re.search(r"[.!?,:;]$", w.text):
                 chunks.append(cur)
                 cur = []
         if cur:
@@ -261,35 +220,41 @@ class VideoMaker:
             chunk_end = chunks[ci + 1][0].start if ci + 1 < len(chunks) else chunk[-1].end + 0.3
             for wi, w in enumerate(chunk):
                 end = chunk[wi + 1].start if wi + 1 < len(chunk) else chunk_end
-                parts = []
-                for wj, other in enumerate(chunk):
-                    t = _ass_escape(other.text.upper())
-                    parts.append(f"{{\\c&H0000E5FF&}}{t}{{\\c&H00FFFFFF&}}" if wj == wi else t)
-                pop = "{\\fscx112\\fscy112\\t(0,90,\\fscx100\\fscy100)}" if wi == 0 else ""
+                parts = [f"{{\\c{HIGHLIGHT_ASS}}}{_ass_escape(o.text)}{{\\c&H00FFFFFF&}}" if wj == wi
+                         else _ass_escape(o.text) for wj, o in enumerate(chunk)]
+                pop = "{\\fscx108\\fscy108\\t(0,80,\\fscx100\\fscy100)}" if wi == 0 else ""
                 lines.append(f"Dialogue: 0,{_ass_time(w.start)},{_ass_time(end)},Cap,,0,0,0,,{pop}{' '.join(parts)}\n")
         out.write_text("".join(lines), encoding="utf-8")
 
+    # ---------------------------------------------------------------- yig'ish
     def build(self, plan: VideoPlan, category: str, workdir: Path) -> tuple[Path, Path]:
-        """Shorts videoni yasaydi, (video_path, muqova_path) qaytaradi."""
+        """Shorts videoni yasaydi, (video_path, muqova_path) qaytaradi. Rasm mualliflari tavsifga qo'shiladi."""
         workdir.mkdir(parents=True, exist_ok=True)
+        finder = ImageFinder(category, plan.sources, self.s.pixabay_key, self.s.ai_images, self.s.stock_fallback)
         segments, all_words, offset = [], [], 0.0
+        last_image: Path | None = None
         for i, scene in enumerate(plan.scenes):
-            log.info("Sahna %d/%d: %s", i + 1, len(plan.scenes), scene.visual_query)
+            log.info("Sahna %d/%d: %s", i + 1, len(plan.scenes), scene.headline)
             audio = workdir / f"s{i:02d}.mp3"
             words = self.synthesize(scene.narration, audio)
-            dur = _duration(audio) + 0.15
-            visual, is_video = self.visuals.get(scene.visual_query, scene.image_prompt, category, workdir / f"v{i:02d}")
-            seg = workdir / f"s{i:02d}.mp4"
-            self._segment(visual, is_video, audio, dur, seg)
+            dur = _duration(audio) + 0.12
+            found = finder.find(scene.image_source, scene.image_query, scene.image_prompt, workdir / f"img{i:02d}")
+            image = found.path if found else last_image  # topilmasa oldingi sahna rasmi davom etadi
+            last_image = image or last_image
+            accent = ACCENTS.get(scene.accent, ACCENTS["white"])
+            bg, text, seg = workdir / f"bg{i:02d}.jpg", workdir / f"tx{i:02d}.png", workdir / f"s{i:02d}.mp4"
+            self.render_background(image, accent, bg)
+            self.render_text(scene.headline, scene.subline, accent, text)
+            self._segment(bg, text, audio, dur, seg)
             all_words += [Word(w.start + offset, w.end + offset, w.text) for w in words]
             offset += _duration(seg)
             segments.append(seg)
 
         (workdir / "concat.txt").write_text("".join(f"file '{s.name}'\n" for s in segments), encoding="utf-8")
         _ffmpeg("-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", "joined.mp4", cwd=workdir)
+        total = _duration(workdir / "joined.mp4")
 
-        # subtitrlar uchun shriftni ish papkasiga ko'chiramiz (libass shu yerdan topadi)
-        fonts = workdir / "fonts"
+        fonts = workdir / "fonts"  # libass shriftni shu papkadan topadi
         fonts.mkdir(exist_ok=True)
         for fp in {self.s.font_path, self.s.font_bold_path}:
             if Path(fp).exists():
@@ -298,18 +263,22 @@ class VideoMaker:
             font_name = ImageFont.truetype(self.s.font_bold_path, 10).getname()[0]
         except OSError:
             font_name = "Arial"
-        self._write_ass(all_words, plan.hook_text, font_name, workdir / "captions.ass")
+        self._write_ass(all_words, font_name, workdir / "captions.ass")
 
+        vf = ("ass=captions.ass:fontsdir=fonts,"
+              "drawbox=x=40:y=1896:w=1000:h=6:color=white@0.25:t=fill,"
+              f"drawbox=x=40:y=1896:w='1000*t/{total:.2f}':h=6:color=0xE8204F:t=fill")
         music = sorted(Path(self.s.music_dir).glob("*.mp3")) if self.s.music_dir and Path(self.s.music_dir).is_dir() else []
         args = ["-i", "joined.mp4"]
         if music:
             args += ["-stream_loop", "-1", "-i", str(Path(random.choice(music)).resolve()),
                      "-filter_complex", "[1:a]volume=0.12[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]",
                      "-map", "0:v", "-map", "[a]"]
-        args += ["-vf", "ass=captions.ass:fontsdir=fonts", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "video.mp4"]
+        args += ["-vf", vf, "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+                 "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "video.mp4"]
         _ffmpeg(*args, cwd=workdir)
 
-        thumb = workdir / "thumbnail.jpg"
-        _ffmpeg("-ss", "1", "-i", "video.mp4", "-frames:v", "1", "-q:v", "3", "thumbnail.jpg", cwd=workdir)
-        return workdir / "video.mp4", thumb
+        _ffmpeg("-ss", "0.6", "-i", "video.mp4", "-frames:v", "1", "-q:v", "3", "thumbnail.jpg", cwd=workdir)
+        if finder.credits and "Rasmlar:" not in plan.description:
+            plan.description = f"{plan.description}\n\nRasmlar: {', '.join(finder.credits)}"[:4900]
+        return workdir / "video.mp4", workdir / "thumbnail.jpg"

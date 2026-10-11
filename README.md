@@ -2,9 +2,13 @@
 
 Bu agent **YouTube Shorts** kanalini avtomatik yuritadi: har safar eng so'nggi, hayratlanarli yangilikni topib, 35–50 soniyalik vertikal video qiladi.
 
-- **Mavzular:** Tibbiyot, Ilm-fan, Sun'iy intellekt, Qiziqarli faktlar (navbat bilan almashadi).
+- **Mavzular:** Koinot, Sun'iy intellekt, Tibbiyot, Ilm-fan (navbat bilan almashadi).
+- **Faqat rasmiy manbalar:** AI yangiliklari Anthropic, OpenAI, Google DeepMind, xAI, Mistral AI, NVIDIA
+  saytlaridan; koinot yangiliklari NASA, ESA, SpaceX, Blue Origin, O'zbekkosmos saytlaridan; tibbiyot WHO, NIH,
+  NEJM, Lancet va boshqalardan olinadi. Rasmlar ham shu mavzuga oid: yangilik sahifasining asosiy rasmi,
+  NASA rasm arxivi, Wikimedia Commons. Mavzuga aloqasiz stok-kadrlar ishlatilmaydi.
 - **Jadval:** Dushanba, Seshanba, Payshanba, Shanba — soat **19:00** (Toshkent vaqti).
-- **O'zi tayyorlaydi:** sun'iy intellekt (Claude yoki OpenAI) oxirgi haftalardagi eng qiziq yangilikni topadi → kuchli "hook" bilan qisqa ssenariy yozadi → har sahnaga mos real stok-video (Pixabay/Pexels) oladi → diktor ovozi, so'zma-so'z yonadigan katta subtitrlar va fon musiqasi bilan 1080×1920 Shorts yasaydi.
+- **O'zi tayyorlaydi:** sun'iy intellekt (Claude yoki OpenAI) oxirgi haftalardagi eng qiziq yangilikni topadi → kuchli "hook" bilan qisqa ssenariy yozadi → har sahnaga katta raqam/kalit so'z va mavzuga oid rasm qo'yadi → diktor ovozi, so'zma-so'z yonadigan subtitr, progress chizig'i va fon musiqasi bilan 1080×1920 Shorts yasaydi.
 - **Telegram orqali ruxsat so'raydi:** joylashdan ~3 soat oldin videoni sizga yuboradi:
   `✅ Ha, joylash` / `❌ Yo'q` / `🔄 Boshqa video yarat`.
   Tasdiqlasangiz, video YouTube'ga yuklanadi va aynan 19:00 da avtomatik ochiladi.
@@ -60,13 +64,10 @@ Matnni (tadqiqot, ssenariy, komment javoblari) yozadigan provayderni `.env` dagi
 Keyinroq istalgan vaqtda bitta qatorni o'zgartirib, boshqasiga o'tishingiz mumkin. Video yasash
 (slaydlar, ovoz, montaj) ikkala holatda ham bir xil.
 
-### 2.1. Stok-video kaliti (bepul, video kadrlar uchun)
-- **Pixabay:** [pixabay.com](https://pixabay.com) da ro'yxatdan o'ting → [pixabay.com/api/docs](https://pixabay.com/api/docs/)
-  sahifasida "Parameters" bo'limidagi `key` qiymatini `.env` dagi `PIXABAY_API_KEY=` ga yozing.
-- **Pexels** (ixtiyoriy): [pexels.com/api](https://www.pexels.com/api/) → `PEXELS_API_KEY=`.
-
-Kalit bo'lmasa, videoda real kadrlar o'rniga oddiy rangli fon bo'ladi. `AI_IMAGES=1` qilsangiz,
-stok-video topilmagan sahnalar uchun OpenAI rasm chizadi (pullik).
+### 2.1. Rasmlar
+Kalit shart emas: rasmlar yangilik sahifasining o'zidan, NASA arxividan va Wikimedia Commons'dan avtomatik
+olinadi, mualliflar video tavsifiga yoziladi. Ixtiyoriy: `AI_IMAGES=1` - rasm topilmasa OpenAI chizadi (pullik);
+`STOCK_FALLBACK=1` + `PIXABAY_API_KEY` - oxirgi chora sifatida Pixabay.
 
 **Fon musiqasi (ixtiyoriy):** loyiha ichida `music` papkasini yarating va unga mualliflik
 huquqisiz `.mp3` fayllarni qo'ying (masalan, YouTube Studio → Audio Library'dan). Agent har
@@ -130,7 +131,7 @@ docker run -d --restart=always --env-file .env \
 | `PUBLISH_TIME` | `19:00` | Joylash vaqti |
 | `TIMEZONE` | `Asia/Tashkent` | Vaqt mintaqasi |
 | `PREPARE_HOURS_BEFORE` | `3` | Video necha soat oldin tayyorlanib, sizga yuboriladi |
-| `TOPICS` | `Tibbiyot,Ilm-fan,Sun'iy intellekt,Qiziqarli faktlar` | Mavzular navbati |
+| `TOPICS` | `Koinot,Sun'iy intellekt,Tibbiyot,Ilm-fan` | Mavzular navbati |
 | `VIDEO_LANGUAGE` | `o'zbek` | Ssenariy tili |
 | `TTS_VOICE` | `uz-UZ-SardorNeural` | Diktor ovozi (`uz-UZ-MadinaNeural` — ayol ovozi; ruscha: `ru-RU-DmitryNeural`) |
 | `COMMENT_CHECK_MINUTES` | `30` | Kommentlarni tekshirish oralig'i |
@@ -141,7 +142,8 @@ docker run -d --restart=always --env-file .env \
 youtube_agent/
   agent.py     — jadval, Telegram tugmalari, asosiy sikl
   content.py   — Claude / OpenAI: veb-qidiruv, ssenariy, komment javoblari
-  video.py     — slaydlar (Pillow) + ovoz (edge-tts) + montaj (ffmpeg)
+  video.py     — kadrlar (Pillow) + ovoz (edge-tts) + subtitr va montaj (ffmpeg)
+  images.py    — mavzuga oid rasmlarni topish (manba sahifa, NASA, Wikimedia)
   youtube.py   — YouTube Data API: yuklash, kommentlar
   telegram.py  — Telegram Bot API
   state.py     — holatni data/state.json da saqlash

@@ -7,27 +7,32 @@ from __future__ import annotations
 
 import logging
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 log = logging.getLogger(__name__)
 
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
-WEB_SEARCH = {"type": "web_search_20260209", "name": "web_search", "max_uses": 8}
-
 
 class Scene(BaseModel):
-    narration: str = Field(description="Diktor matni: 1-2 qisqa, jonli gap (10-25 so'z)")
-    visual_query: str = Field(description="Shu sahnaga mos stok-video qidiruvi, INGLIZCHA, 2-4 so'z (masalan: 'brain neurons glowing')")
-    image_prompt: str = Field(description="Agar video topilmasa, AI rasm uchun inglizcha batafsil tavsif (matnsiz, fotorealistik)")
+    narration: str = Field(description="Diktor matni: 1-2 qisqa, jonli gap (8-22 so'z)")
+    headline: str = Field(description="Ekran tepasidagi KATTA yozuv: raqam+birlik yoki kalit so'z, 1-3 so'z (masalan: '8 DAQIQA', '4,3 MLN QUYOSH', 'GPT-6', '1-BEKAT')")
+    subline: str = Field(description="Katta yozuv tagidagi kichik izoh, 2-5 so'z (masalan: 'QUYOSH - YER · YORUG'LIK')")
+    accent: Literal["orange", "cyan", "white", "yellow"] = Field(description="Katta yozuv rangi")
+    image_source: Literal["source_article", "search"] = Field(
+        description="source_article - manba maqolaning asosiy rasmi (yangilikning o'zi haqida sahnalar uchun); "
+                    "search - image_query bo'yicha rasm qidirish")
+    image_query: str = Field(description="Aniq obyekt nomi INGLIZCHA, rasm qidirish uchun (masalan: 'Sagittarius A* black hole', "
+                                         "'Neptune Voyager 2', 'NVIDIA Blackwell GPU', 'mRNA vaccine vial')")
+    image_prompt: str = Field(description="Rasm topilmasa AI chizishi uchun inglizcha tavsif (matnsiz, fotorealistik, qora fon)")
 
 
 class VideoPlan(BaseModel):
     title: str = Field(description="Shorts sarlavhasi: 60 belgigacha, hayratlantiruvchi, oxirida #shorts")
     description: str = Field(description="2-3 gaplik tavsif, manbalar va 3-5 hashtag")
     tags: list[str] = Field(description="8-12 ta teg")
-    hook_text: str = Field(description="Birinchi 2 soniyada ekran tepasida turadigan 2-5 so'zlik katta yozuv")
-    scenes: list[Scene] = Field(description="5-8 ta sahna; birinchisi - hook, oxirgisi - qisqa yakun")
-    sources: list[str] = Field(description="Foydalanilgan manbalar URL'lari")
+    scenes: list[Scene] = Field(description="8-12 ta sahna; birinchisi - hook, oxirgisi - qisqa yakun")
+    sources: list[str] = Field(description="Yangilik olingan rasmiy sahifalar URL'lari (eng muhimi birinchi)")
 
 
 class CommentReply(BaseModel):
@@ -40,36 +45,59 @@ class ContentRefused(RuntimeError):
     pass
 
 
+# Har bir soha uchun ma'lumot olinadigan rasmiy manbalar (faqat shu saytlardan qidiriladi)
+CATEGORY_SOURCES: dict[str, list[str]] = {
+    "Sun'iy intellekt": ["anthropic.com", "openai.com", "deepmind.google", "blog.google", "x.ai",
+                         "mistral.ai", "nvidia.com", "nvidianews.nvidia.com", "ai.meta.com"],
+    "Koinot": ["nasa.gov", "esa.int", "spacex.com", "blueorigin.com", "uzspace.uz", "gov.uz",
+               "jpl.nasa.gov", "science.nasa.gov", "webbtelescope.org"],
+    "Tibbiyot": ["who.int", "nih.gov", "cdc.gov", "fda.gov", "nejm.org", "thelancet.com", "nature.com",
+                 "bmj.com", "mayoclinic.org", "ssv.uz"],
+    "Ilm-fan": ["nature.com", "science.org", "home.cern", "mit.edu", "caltech.edu", "max-planck.de",
+                "newscientist.com", "scientificamerican.com", "phys.org"],
+}
+
+
+def category_domains(category: str) -> list[str]:
+    return CATEGORY_SOURCES.get(category, [])
+
+
 # ---------------------------------------------------------------- umumiy promptlar
 def research_prompt(category: str, avoid_titles: list[str]) -> str:
     avoid = "\n".join(f"- {t}" for t in avoid_titles[-60:]) or "(hali yo'q)"
+    domains = category_domains(category)
+    where = ("FAQAT shu rasmiy saytlardagi ma'lumotdan foydalan: " + ", ".join(domains) + ".\n") if domains else ""
     return (
-        f"Sen viral YouTube Shorts kanali uchun yangilik ovchisisan. Kategoriya: «{category}».\n"
-        "Veb-qidiruv orqali OXIRGI 1-3 HAFTADAGI eng hayratlanarli, odamlar do'stiga aytib beradigan "
-        "BITTA yangilik yoki kashfiyotni top (yangi texnologiya, rekord, g'aroyib kashfiyot, kutilmagan "
-        "tadqiqot natijasi). Zerikarli, faqat mutaxassislarga qiziq mavzularni tanlama.\n"
-        "Ishonchli manbalar: yirik nashrlar, ilmiy jurnallar, universitetlar, NASA, WHO va h.k.\n"
+        f"Sen viral YouTube Shorts kanali uchun yangilik ovchisisan. Soha: «{category}».\n"
+        f"{where}"
+        "Veb-qidiruv orqali OXIRGI 1-3 HAFTADAGI eng hayratlanarli BITTA yangilikni top: yangi model yoki "
+        "mahsulot, kosmik missiya natijasi, rekord, g'aroyib kashfiyot, muhim tibbiy yutuq. Oddiy odam "
+        "do'stiga aytib beradigan, raqamlari kuchli mavzu bo'lsin.\n"
         f"Avval chiqqan videolar (takrorlama):\n{avoid}\n\n"
-        "Natija: yangilik nima, nega hayratlanarli, oddiy odam hayotiga qanday ta'sir qiladi, "
-        "3-5 ta aniq fakt (raqamlar bilan) va manba URL'lari."
+        "Natija: yangilik nima, kim e'lon qildi, nega hayratlanarli, 5-8 ta aniq raqam/fakt va ularni "
+        "tasavvur qilish uchun taqqoslashlar (masalan 'Quyoshdan 4 mln marta og'ir'), hamda rasmiy "
+        "sahifalar URL'lari (eng asosiysi birinchi)."
     )
 
 
 def script_prompt(language: str, category: str, research_notes: str) -> str:
     return (
-        f"Quyidagi yangilik asosida {language} tilida 35-50 soniyalik YouTube Shorts ssenariysini yoz "
-        f"(jami 90-130 so'z). Kategoriya: {category}.\n"
-        "QOIDALAR:\n"
-        "- 1-sahna HOOK: tomoshabinni 2 soniyada ushlab qoladigan hayratlantiruvchi gap "
-        "(masalan: 'Olimlar hozirgina ... qildi!', 'Buni bilsangiz hayron qolasiz...'). Salomlashish YO'Q.\n"
-        "- Yangilik kabi gapir: kim, nima qildi, nima uchun bu muhim. Jonli, so'zlashuv tili, qisqa gaplar.\n"
-        "- Viktorina, test savoli, 'savol: ...' kabi sarlavhalar, ro'yxatlar va quruq raqamlar to'plami YO'Q.\n"
-        "- Raqamlarni oddiy qilib ayt ('deyarli 2 baravar', '50 yorug'lik yili uzoqda').\n"
-        "- Maxsus belgilar (⊕, ±, Å, ~) ishlatma - faqat oddiy harflar va raqamlar.\n"
-        "- Oxirgi sahna: 1 gaplik kuchli xulosa + 'Bunday yangiliklar uchun obuna bo'ling!'.\n"
-        "- Faqat tadqiqotdagi faktlardan foydalan, o'ylab topma.\n"
-        "- Tibbiyot bo'lsa tavsifga 'Ma'lumot uchun, shifokor maslahatining o'rnini bosmaydi' qo'sh.\n"
-        "- Har sahna uchun visual_query - aynan shu gapga mos, chiroyli kadr beradigan inglizcha qidiruv.\n\n"
+        f"Quyidagi yangilik asosida {language} tilida 45-75 soniyalik YouTube Shorts ssenariysini yoz "
+        f"(jami 110-180 so'z, 8-12 sahna). Soha: {category}.\n"
+        "USLUB (namuna: 'Eng katta qora tuynuk qanchalik katta?' kabi kanallar):\n"
+        "- 1-sahna HOOK: savol yoki hayratlanarli da'vo, headline - mavzu nomi (masalan 'ENG KATTA QORA TUYNUK'), "
+        "subline - qisqa savol ('QANCHALIK KATTA?'). Salomlashish YO'Q.\n"
+        "- Har sahnada BITTA kuchli raqam yoki fakt. headline - shu raqam birligi bilan ('8 DAQIQA', "
+        "'4,3 MLN QUYOSH', '2,5 KUN'), subline - u nimani anglatadi ('QUYOSH - YER · YORUG'LIK').\n"
+        "- Tushunarli taqqoslashlar orqali hikoya qil: kichikdan kattaga, bekatma-bekat, oddiy narsadan "
+        "hayratlanarli natijaga. Jonli so'zlashuv tili, qisqa gaplar.\n"
+        "- Viktorina, test savollari, quruq ro'yxatlar YO'Q. Maxsus belgilar (⊕, ±, Å, ~) YO'Q.\n"
+        "- Oxirgi sahna: kuchli xulosa + 'Obuna bo'ling!'.\n"
+        "- Faqat tadqiqotdagi faktlar, o'ylab topma.\n"
+        "- RASMLAR faqat shu mavzuga oid bo'lsin: image_query - aynan sahnadagi obyekt (sayyora nomi, "
+        "teleskop, kompaniya mahsuloti, kasallik/dori nomi), umumiy so'zlar ('technology', 'people') YO'Q. "
+        "Yangilikning o'zi haqidagi sahnalarda image_source=source_article.\n"
+        "- Tibbiyot bo'lsa tavsifga 'Ma'lumot uchun, shifokor maslahatining o'rnini bosmaydi' qo'sh.\n\n"
         f"TADQIQOT:\n{research_notes}"
     )
 
@@ -123,6 +151,12 @@ class ClaudeCreator(BaseCreator):
         super().__init__(model, language)
         self.client = anthropic.Anthropic()
 
+    def _web_search(self, category: str) -> dict:
+        tool = dict(self.WEB_SEARCH)
+        if category_domains(category):
+            tool["allowed_domains"] = category_domains(category)
+        return tool
+
     def _check(self, resp) -> None:
         if resp.stop_reason == "refusal":
             raise ContentRefused(f"Claude so'rovni rad etdi: {resp.stop_details}")
@@ -137,7 +171,7 @@ class ClaudeCreator(BaseCreator):
                 fallbacks="default",
                 thinking={"type": "adaptive"},
                 output_config={"effort": "high"},
-                tools=[self.WEB_SEARCH],
+                tools=[self._web_search(category)],
                 messages=messages,
             )
             self._check(resp)
@@ -176,11 +210,18 @@ class OpenAICreator(BaseCreator):
         super().__init__(model, language)
         self.client = OpenAI()
 
+    @staticmethod
+    def _web_search(category: str) -> dict:
+        tool: dict = {"type": "web_search"}
+        if category_domains(category):
+            tool["filters"] = {"allowed_domains": category_domains(category)}
+        return tool
+
     def research(self, category: str, avoid_titles: list[str]) -> str:
         resp = self.client.responses.create(
             model=self.model,
             input=research_prompt(category, avoid_titles),
-            tools=[{"type": "web_search"}],
+            tools=[self._web_search(category)],
             reasoning={"effort": "medium"},
         )
         if not resp.output_text:

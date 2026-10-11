@@ -26,15 +26,21 @@ def load_dotenv(path: str = ".env") -> None:
 
 if sys.platform == "win32":
     DEFAULT_FONT, DEFAULT_FONT_BOLD = r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf"
+    DEFAULT_HEADLINE_FONT = r"C:\Windows\Fonts\impact.ttf"
 elif sys.platform == "darwin":
     DEFAULT_FONT = DEFAULT_FONT_BOLD = "/System/Library/Fonts/Supplemental/Arial.ttf"
+    DEFAULT_HEADLINE_FONT = "/System/Library/Fonts/Supplemental/Impact.ttf"
 else:
     DEFAULT_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-    DEFAULT_FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    DEFAULT_FONT_BOLD = DEFAULT_HEADLINE_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 
 def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
+
+
+def _flag(name: str) -> bool:
+    return _env(name, "0").lower() in ("1", "true", "yes", "ha")
 
 
 @dataclass
@@ -57,12 +63,13 @@ class Config:
     tts_voice: str
     topics: list[str]
     tts_rate: str
-    pexels_key: str
     pixabay_key: str
     music_dir: str
     ai_images: bool
+    stock_fallback: bool
     font_path: str
     font_bold_path: str
+    headline_font_path: str
     data_dir: Path
     extra: dict = field(default_factory=dict)
 
@@ -70,7 +77,8 @@ class Config:
         from .video import ShortsSettings
 
         return ShortsSettings(self.tts_voice, self.tts_rate, self.font_path, self.font_bold_path,
-                              self.pexels_key, self.pixabay_key, self.music_dir, self.ai_images)
+                              self.headline_font_path, self.pixabay_key, self.music_dir, self.ai_images,
+                              self.stock_fallback)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -97,13 +105,14 @@ class Config:
             comment_lookback_days=int(_env("COMMENT_LOOKBACK_DAYS", "3")),
             video_language=_env("VIDEO_LANGUAGE", "o'zbek"),
             tts_voice=_env("TTS_VOICE", "uz-UZ-SardorNeural"),
-            topics=[t.strip() for t in _env("TOPICS", "Tibbiyot,Ilm-fan,Sun'iy intellekt,Qiziqarli faktlar").split(",") if t.strip()],
+            topics=[t.strip() for t in _env("TOPICS", "Koinot,Sun'iy intellekt,Tibbiyot,Ilm-fan").split(",") if t.strip()],
             tts_rate=_env("TTS_RATE", "+8%"),
-            pexels_key=_env("PEXELS_API_KEY"),
             pixabay_key=_env("PIXABAY_API_KEY"),
             music_dir=_env("MUSIC_DIR", "music"),
-            ai_images=_env("AI_IMAGES", "0").lower() in ("1", "true", "yes", "ha"),
+            ai_images=_flag("AI_IMAGES"),
+            stock_fallback=_flag("STOCK_FALLBACK"),
             font_path=_env("FONT_PATH", DEFAULT_FONT),
             font_bold_path=_env("FONT_BOLD_PATH", DEFAULT_FONT_BOLD),
+            headline_font_path=_env("HEADLINE_FONT_PATH", DEFAULT_HEADLINE_FONT),
             data_dir=data_dir,
         )
