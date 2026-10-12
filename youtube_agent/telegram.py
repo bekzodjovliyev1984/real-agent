@@ -8,6 +8,8 @@ from pathlib import Path
 
 import httpx
 
+from .net import http_client
+
 log = logging.getLogger(__name__)
 
 MAX_VIDEO_BYTES = 50 * 1024 * 1024  # Bot API orqali yuborish chegarasi
@@ -18,7 +20,7 @@ class TelegramBot:
         self.base = f"https://api.telegram.org/bot{token}"
         self.chat_id = chat_id
         self.offset = 0
-        self.http = httpx.Client(timeout=httpx.Timeout(60.0, read=70.0))
+        self.http = http_client(httpx.Timeout(60.0, read=70.0), headers={})
 
     def _call(self, method: str, **params) -> dict:
         files = params.pop("files", None)

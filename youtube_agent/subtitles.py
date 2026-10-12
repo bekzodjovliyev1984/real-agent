@@ -33,12 +33,13 @@ def norm_token(t: str) -> str:
 
 # ------------------------------------------------------------- tanib olish
 def transcribe_words(audio: Path, language: str = "uz", prompt: str = "") -> tuple[str, list[WordTiming]]:
-    """OpenAI whisper-1: so'zma-so'z vaqtlar bilan transkripsiya."""
+    """OpenAI whisper-1: so'zma-so'z vaqtlar bilan transkripsiya.
+    API 'uz' til kodini qabul qilmaydi, shuning uchun til avtomatik aniqlanadi; matn esa ishora (prompt) sifatida beriladi."""
     from openai import OpenAI
 
     with open(audio, "rb") as f:
         res = OpenAI().audio.transcriptions.create(
-            model="whisper-1", file=f, language=language, response_format="verbose_json",
+            model="whisper-1", file=f, response_format="verbose_json",
             timestamp_granularities=["word"], prompt=prompt[:800],
         )
     words = [WordTiming(text=w.word, start=w.start, end=w.end) for w in (res.words or [])]

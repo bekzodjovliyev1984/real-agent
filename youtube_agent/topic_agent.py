@@ -32,7 +32,7 @@ def research_topic(llm: LLM, category: str, avoid_titles: list[str],
     prompt = render_prompt("topic", category=cat.name, category_hint=cat.hint, domains_line=domains_line,
                            avoid=avoid, performance=perf)
     log.info("Mavzu qidirilmoqda: %s", cat.name)
-    text = llm.research(prompt, domains=cat.domains or None)
+    text = llm.research(prompt, domains=cat.domains or None, effort="medium")
     draft = llm.parse_validated(render_prompt("topic_parse", research=text), TopicDraft, _normalize)
     # AI matnda yo'q URL qo'shib yubormasin
     for c in draft.claims:

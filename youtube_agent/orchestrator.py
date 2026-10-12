@@ -9,7 +9,9 @@ Sifat nazoratidan o'tmasa: ko'pi bilan 2 marta avtomatik tuzatish, keyin `needs_
 from __future__ import annotations
 
 import logging
+import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -43,6 +45,7 @@ class PipelineSettings:
     min_seconds: float = 25.0
     max_seconds: float = 55.0
     max_corrections: int = 2
+    visual_workers: int = 4
     ai_video_enabled: bool = False
     music_dir: Path | None = None
     music_db: float = -22.0
@@ -174,17 +177,23 @@ class Pipeline:
         rejected = set(job.meta.get("rejected_assets", []))
         sources = [s.url for c in plan.claims for s in c.sources]
         logs = job.read_json("assets_log.json") if job.has("assets_log.json") else {}
-        for sc in plan.scenes:
-            if sc.id in have:
-                continue
+        todo = [sc for sc in plan.scenes if sc.id not in have]
+        lock = threading.Lock()
+        log.info("Kadrlar qidirilmoqda: %d sahna, %d tasi parallel", len(todo), self.s.visual_workers)
+
+        def work(sc):
             asset, slog = searcher.find(sc, job.path(f"assets/scene_{sc.id:02d}"), sources, palette=sc.id,
                                         skip_keys=rejected, fallback_title=plan.topic[:40])
-            have[sc.id] = asset
-            logs[str(sc.id)] = slog.tried
-            log.info("Sahna %d: %s (%s) %s", sc.id, asset.provider, asset.media_type,
-                     f"ball={asset.relevance_score}" if asset.relevance_score is not None else "")
-            job.write("assets.json", [have[k].model_dump() for k in sorted(have)])  # har sahnadan keyin saqlanadi
-            job.write("assets_log.json", logs)
+            with lock:
+                have[sc.id] = asset
+                logs[str(sc.id)] = slog.tried
+                log.info("Sahna %d/%d tayyor: %s (%s) %s", sc.id, len(plan.scenes), asset.provider, asset.media_type,
+                         f"ball={asset.relevance_score}" if asset.relevance_score is not None else "")
+                job.write("assets.json", [have[k].model_dump() for k in sorted(have)])  # har sahnadan keyin saqlanadi
+                job.write("assets_log.json", logs)
+
+        with ThreadPoolExecutor(max_workers=self.s.visual_workers) as ex:
+            list(ex.map(work, todo))
         job.meta.setdefault("costs", {})["ai_video"] = round(sum(a.cost_usd for a in have.values()), 4)
         job.set_state(JobState.assets_ready, ", ".join(f"{k}:{have[k].media_type}" for k in sorted(have)))
 

@@ -118,7 +118,7 @@ def main() -> None:
                 print(f"❌ {r['provider']}:{r['voice']} - {r['error']}")
             else:
                 sim = f", tanib olish o'xshashligi {r['asr_similarity']}" if "asr_similarity" in r else ""
-                print(f"🔊 {r['provider']}:{r['voice']} - {r['duration']}s, {r['latency_s']}s kutish, ${r['cost_usd']}{sim}")
+                print(f"🔊 {r['provider']}:{r['voice']} - {r['duration']}s, ${r['cost_usd']}{sim}\n   {r['file']}")
         print("\nHar bir faylni eshitib ko'ring va eng tabiiy ovozni .env'da tanlang (OPENAI_TTS_VOICE / TTS_PROVIDER).")
 
     elif a.cmd == "analytics":

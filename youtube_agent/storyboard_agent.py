@@ -66,6 +66,6 @@ def build_storyboard(llm: LLM, category: str, topic: TopicDraft, script: ScriptD
                            min_scenes=max(3, int(approx / 6)), max_scenes=max(4, int(approx / 2.5)))
     plan = llm.parse_validated(prompt, StoryboardDraft,
                                lambda d: build_plan(d, script, topic, claims, category, ai_video_enabled),
-                               effort="medium")
+                               effort="low")
     log.info("Storyboard: %d sahna, ~%.0fs", len(plan.scenes), plan.target_duration_seconds)
     return plan

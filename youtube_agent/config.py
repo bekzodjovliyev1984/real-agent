@@ -87,6 +87,7 @@ class Config:
     min_seconds: float
     max_seconds: float
     max_corrections: int
+    visual_workers: int
     qa_min: dict[str, float]
     # telegram / youtube / jadval
     telegram_token: str
@@ -153,6 +154,7 @@ class Config:
             min_seconds=_float("SHORT_MIN_SECONDS", 25.0),
             max_seconds=_float("SHORT_MAX_SECONDS", 55.0),
             max_corrections=int(_env("MAX_CORRECTIONS", "2")),
+            visual_workers=int(_env("VISUAL_WORKERS", "4")),
             qa_min={"storytelling": _float("QA_MIN_STORY", 6), "visual_relevance": _float("QA_MIN_VISUAL", 7),
                     "audio_quality": _float("QA_MIN_AUDIO", 7), "subtitle_quality": _float("QA_MIN_SUBTITLE", 6),
                     "technical_quality": _float("QA_MIN_TECHNICAL", 7)},

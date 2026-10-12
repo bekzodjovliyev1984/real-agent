@@ -16,6 +16,7 @@ import httpx
 
 from .categories import render_prompt
 from .llm import LLM
+from .net import http_client
 from .schemas import Claim, ClaimDraft, FactCheckDraft, SourceRef, VerificationStatus
 
 log = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ def _url_core(url: str) -> str:
 def check_url(url: str, client: httpx.Client | None = None) -> bool | None:
     """True - sahifa ochildi; False - yo'q (404/410/domen yo'q); None - aniqlab bo'lmadi (403, 429, 5xx...)."""
     own = client is None
-    client = client or httpx.Client(timeout=12, follow_redirects=True, headers=UA)
+    client = client or http_client(12, UA)
     try:
         r = client.get(url)
         if r.status_code < 400:
@@ -89,9 +90,9 @@ def verify_claims(llm: LLM, claims: list[ClaimDraft]) -> tuple[list[Claim], str]
     payload = json.dumps([{"id": c.id, "claim": c.claim, "sources": [s.url for s in c.sources]} for c in claims],
                          ensure_ascii=False, indent=1)
     log.info("Fakt-tekshiruv: %d ta da'vo", len(claims))
-    evidence = llm.research(render_prompt("fact_check", claims=payload), domains=None, effort="high")
+    evidence = llm.research(render_prompt("fact_check", claims=payload), domains=None, effort="medium")
     ids = [c.id for c in claims]
-    with httpx.Client(timeout=12, follow_redirects=True, headers=UA) as http:
+    with http_client(12, UA) as http:
         result = llm.parse_validated(
             render_prompt("fact_check_parse", ids=", ".join(ids), verification=evidence), FactCheckDraft,
             lambda d: to_claims(d, ids, evidence, lambda u: check_url(u, http)),

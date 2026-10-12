@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from dataclasses import dataclass, field
 from html import unescape
 from pathlib import Path
@@ -24,6 +25,7 @@ from .categories import render_prompt
 from .graphics import render_graphic
 from .jobs import retry
 from .llm import LLM
+from .net import http_client
 from .media import MediaError, average_hash, extract_frames, hash_distance, probe
 from .schemas import AssetMeta, Scene, VisualCheckDraft
 from .video_generator import VideoGenerator
@@ -62,7 +64,7 @@ class VisualSettings:
     allow_publisher_images: bool = True
     vision_check: bool = True
     min_relevance: float = 6.0
-    max_checks_per_scene: int = 6
+    max_checks_per_scene: int = 4
     font_bold: str = ""
     font_regular: str = ""
 
@@ -71,7 +73,7 @@ class VisualSettings:
 class Providers:
     def __init__(self, s: VisualSettings, http: httpx.Client | None = None):
         self.s = s
-        self.http = http or httpx.Client(timeout=30, follow_redirects=True, headers=UA)
+        self.http = http or http_client(30, UA)
         self._og_cache: dict[str, str | None] = {}
 
     def _get(self, url: str, **params) -> dict:
@@ -200,6 +202,7 @@ class VisualSearcher:
         self.p = providers or Providers(settings)
         self.used_keys: set[str] = set()
         self.used_hashes: list[str] = []
+        self._lock = threading.Lock()  # sahnalar parallel qidirilganda takrorni oldini olish
 
     # --------------------------------------------------------------- yordamchi
     def _search(self, name: str, query: str, page_urls: list[str]) -> list[Candidate]:
@@ -289,7 +292,7 @@ class VisualSearcher:
                         scored.append((sc, c))
                 scored.sort(key=lambda x: -x[0])
                 slog.tried.append({"provider": name, "query": q, "found": len(cands), "usable": len(scored)})
-                for _, c in scored[:3]:
+                for _, c in scored[:2]:
                     if self.llm and self.s.vision_check and checks >= self.s.max_checks_per_scene:
                         break
                     asset = self._try_candidate(scene, c, scene_dir, slog)
@@ -325,8 +328,12 @@ class VisualSearcher:
                 if not verdict.matches or verdict.score < self.s.min_relevance:
                     entry["rejected"] = "mos emas"
                     return None
-            self.used_keys.add(c.key)
-            self.used_hashes.append(fp)
+            with self._lock:  # tekshiruv paytida boshqa sahna xuddi shu kadrni olgan bo'lishi mumkin
+                if c.key in self.used_keys or self._is_duplicate(fp):
+                    entry["rejected"] = "takroriy kadr"
+                    return None
+                self.used_keys.add(c.key)
+                self.used_hashes.append(fp)
             return AssetMeta(scene_id=scene.id, provider=c.provider, asset_id=c.asset_id, media_type=c.media_type,
                              source_url=c.url, page_url=c.page_url, creator=c.creator, license=c.license,
                              license_url=c.license_url, license_verified=c.license_verified, query=c.query,

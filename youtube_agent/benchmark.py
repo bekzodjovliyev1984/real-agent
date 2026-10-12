@@ -34,11 +34,14 @@ def run_benchmark(out_dir: Path, voices: str, use_asr: bool, tts_model: str, ins
             res = tts.synthesize(text, out_dir / f"{provider}_{voice}")
             row.update(file=str(res.path), duration=round(duration(res.path), 2), latency_s=res.latency_s,
                        cost_usd=res.cost_usd, word_timestamps=bool(res.words))
-            if use_asr:
-                asr_text, _ = transcribe_words(res.path, "uz", "")
-                row.update(asr_text=asr_text, asr_similarity=round(similarity(text, asr_text), 3))
         except Exception as e:
             row["error"] = str(e)[:300]
+        if use_asr and "file" in row:
+            try:  # tanib olish faqat qo'shimcha signal: xato bo'lsa ham ovoz fayli yaroqli
+                asr_text, _ = transcribe_words(Path(row["file"]), "uz", text)
+                row.update(asr_text=asr_text, asr_similarity=round(similarity(text, asr_text), 3))
+            except Exception as e:
+                row["asr_error"] = str(e)[:200]
         results.append(row)
         log.info("%s", row)
     (out_dir / "report.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), "utf-8")

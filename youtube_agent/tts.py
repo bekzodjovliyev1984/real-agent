@@ -149,9 +149,12 @@ class EdgeTTS:
         return words
 
     def synthesize(self, text: str, out: Path) -> TTSResult:
+        from .jobs import retry
+
         started = time.time()
         out = out.with_suffix(".mp3")
-        words = asyncio.run(self._run(text, out))
+        # Microsoft serveri ba'zan vaqtincha 403 qaytaradi - bir necha marta qayta urinamiz
+        words = retry(lambda: asyncio.run(self._run(text, out)), attempts=4, base_delay=3, what="Edge TTS")
         return TTSResult(out, words, self.name, self.voice, "edge-neural", 0.0, round(time.time() - started, 2))
 
 

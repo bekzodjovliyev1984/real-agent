@@ -62,6 +62,6 @@ def write_script(llm: LLM, category: str, topic: TopicDraft, claims: list[Claim]
                            question=topic.central_question, claims=claims_block(usable))
     ids = {c.id for c in usable}
     script = llm.parse_validated(prompt, ScriptDraft, lambda d: validate_script(d, ids, min_words, max_words),
-                                 effort="high")
+                                 effort="medium")
     log.info("Ssenariy: %s (%d so'z)", script.title, sum(word_count(b.text) for b in script.beats))
     return script
