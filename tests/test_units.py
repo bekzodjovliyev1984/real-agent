@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -289,3 +291,19 @@ def test_test_mode_defaults_are_cheap(tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_MODE", "0")
     c = Config.from_env()
     assert c.llm_model == "gpt-5" and c.max_corrections == 2 and c.max_cost_usd == 1.0
+
+
+def test_visual_uses_best_on_topic_footage_before_graphic(tmp_path):
+    media = make_media(tmp_path / "m")
+    llm = FakeLLM(visual_score=4.5)  # umumiy mavzuga mos, lekin aniq gapni ko'rsatmaydi
+    vs = VisualSettings(vision_check=True, font_bold=FONT_BOLD, font_regular=FONT, max_checks_per_scene=3)
+    searcher = FakeSearcher(vs, llm, None, FakeProviders(media))
+    asset, slog = searcher.find(_scene(1), tmp_path / "s1", [])
+    assert asset.media_type == "video" and asset.relevance_score == 4.5
+    assert "umumiy mavzuga mos" in asset.relevance_reason and any("fallback" in t for t in slog.tried)
+
+
+def test_job_root_is_absolute(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    job = Job.create(Path("rel_jobs"), "Ilm-fan")
+    assert job.root.is_absolute() and job.path("render").is_absolute()

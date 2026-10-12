@@ -56,7 +56,7 @@ def retry(fn: Callable[[], Any], attempts: int = 3, base_delay: float = 2.0,
 
 class Job:
     def __init__(self, root: Path):
-        self.root = root
+        self.root = Path(root).resolve()  # to'liq manzil: ffmpeg boshqa papkadan ishga tushganda ham topadi
         self.root.mkdir(parents=True, exist_ok=True)
         for sub in ("assets", "audio", "render"):
             (self.root / sub).mkdir(exist_ok=True)

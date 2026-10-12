@@ -95,3 +95,14 @@ def test_budget_cap_stops_before_next_paid_stage(pipeline_factory, monkeypatch):
     p.s.max_cost_usd = 0
     p.run(job)
     assert "research" not in llm.calls and "TopicDraft" not in llm.calls
+
+
+def test_relative_jobs_dir_like_windows_cli(pipeline_factory, tmp_path, monkeypatch):
+    """Windows'da DATA_DIR=data (nisbiy) bo'lganda montaj 'joined.mp4 topilmadi' xatosi bilan yiqilgan edi."""
+    from pathlib import Path
+    monkeypatch.chdir(tmp_path)
+    p = pipeline_factory(FakeLLM())
+    p.s.jobs_dir = Path("data") / "jobs"
+    job = p.new_job("Yangi mashinalar")
+    p.run(job)
+    assert job.state == JobState.approved and job.has("render/video.mp4")

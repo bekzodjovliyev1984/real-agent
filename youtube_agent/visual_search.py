@@ -64,6 +64,7 @@ class VisualSettings:
     allow_publisher_images: bool = True
     vision_check: bool = True
     min_relevance: float = 6.0
+    fallback_relevance: float = 4.0  # aniq kadr topilmasa: umumiy mavzuga mos (masalan "AI data center") kadr
     max_checks_per_scene: int = 4
     font_bold: str = ""
     font_regular: str = ""
@@ -267,6 +268,7 @@ class VisualSearcher:
     def find(self, scene: Scene, scene_dir: Path, page_urls: list[str], palette: int = 0,
              skip_keys: set[str] | None = None, fallback_title: str = "") -> tuple[AssetMeta, SceneSearchLog]:
         scene_dir.mkdir(parents=True, exist_ok=True)
+        best: dict = {}  # shu sahna uchun zaxira kadr (parallel sahnalar aralashmasligi uchun lokal)
         slog = SceneSearchLog(scene.id)
         skip = set(skip_keys or ())
         need = scene.estimated_duration
@@ -299,7 +301,7 @@ class VisualSearcher:
                 for _, c in scored[:2]:
                     if self._vision() and checks >= self.s.max_checks_per_scene:
                         break
-                    asset = self._try_candidate(scene, c, scene_dir, slog)
+                    asset = self._try_candidate(scene, c, scene_dir, slog, best)
                     checks += 1
                     if asset:
                         return asset, slog
@@ -309,9 +311,15 @@ class VisualSearcher:
             asset = self._ai_video(scene, scene_dir, slog)
             if asset:
                 return asset, slog
+        fb = best.get("meta")
+        if fb and self._claim(fb):
+            fb.relevance_reason = f"aniq kadr topilmadi, umumiy mavzuga mos: {fb.relevance_reason}"
+            slog.tried.append({"fallback": f"{fb.provider}:{fb.asset_id}", "score": fb.relevance_score})
+            return fb, slog
         return self._graphic(scene, scene_dir, palette, fallback_title), slog
 
-    def _try_candidate(self, scene: Scene, c: Candidate, scene_dir: Path, slog: SceneSearchLog) -> AssetMeta | None:
+    def _try_candidate(self, scene: Scene, c: Candidate, scene_dir: Path, slog: SceneSearchLog,
+                       best: dict | None = None) -> AssetMeta | None:
         entry = {"candidate": c.key, "query": c.query}
         slog.tried.append(entry)
         try:
@@ -331,21 +339,39 @@ class VisualSearcher:
                 entry.update(score=score, reason=reason[:200])
                 if not verdict.matches or verdict.score < self.s.min_relevance:
                     entry["rejected"] = "mos emas"
+                    if best is not None and verdict.score >= self.s.fallback_relevance:
+                        if "meta" not in best or verdict.score > (best["meta"].relevance_score or 0):
+                            # zaxira: aniq kadr topilmasa ishlatiladi
+                            best["meta"] = self._meta(scene, c, path, info, verdict.score, reason, fp)
                     return None
-            with self._lock:  # tekshiruv paytida boshqa sahna xuddi shu kadrni olgan bo'lishi mumkin
-                if c.key in self.used_keys or self._is_duplicate(fp):
-                    entry["rejected"] = "takroriy kadr"
-                    return None
-                self.used_keys.add(c.key)
-                self.used_hashes.append(fp)
-            return AssetMeta(scene_id=scene.id, provider=c.provider, asset_id=c.asset_id, media_type=c.media_type,
-                             source_url=c.url, page_url=c.page_url, creator=c.creator, license=c.license,
-                             license_url=c.license_url, license_verified=c.license_verified, query=c.query,
-                             local_path=str(path), width=info.width, height=info.height, duration=info.duration,
-                             relevance_score=score, relevance_reason=reason, fingerprint=fp)
+            meta = self._meta(scene, c, path, info, score, reason, fp)
+            return meta if self._claim(meta) else self._dup(entry)
         except Exception as e:
             entry["error"] = str(e)[:200]
             return None
+
+    @staticmethod
+    def _dup(entry: dict) -> None:
+        entry["rejected"] = "takroriy kadr"
+        return None
+
+    def _claim(self, meta: AssetMeta) -> bool:
+        """Kadrni band qiladi (parallel sahnalar bir xil kadrni olmasligi uchun)."""
+        key = f"{meta.provider}:{meta.asset_id}"
+        with self._lock:
+            if key in self.used_keys or self._is_duplicate(meta.fingerprint):
+                return False
+            self.used_keys.add(key)
+            self.used_hashes.append(meta.fingerprint)
+            return True
+
+    @staticmethod
+    def _meta(scene: Scene, c: Candidate, path: Path, info, score, reason: str, fp: str) -> AssetMeta:
+        return AssetMeta(scene_id=scene.id, provider=c.provider, asset_id=c.asset_id, media_type=c.media_type,
+                         source_url=c.url, page_url=c.page_url, creator=c.creator, license=c.license,
+                         license_url=c.license_url, license_verified=c.license_verified, query=c.query,
+                         local_path=str(path), width=info.width, height=info.height, duration=info.duration,
+                         relevance_score=score, relevance_reason=reason, fingerprint=fp)
 
     def _ai_video(self, scene: Scene, scene_dir: Path, slog: SceneSearchLog) -> AssetMeta | None:
         try:

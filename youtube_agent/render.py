@@ -181,7 +181,8 @@ def finalize(video: Path, audio: Path, ass: Path, total: float, out: Path, setti
     vf = (f"tpad=stop_mode=clone:stop_duration=1,ass={ass.name}:fontsdir=fonts,"
           "drawbox=x=60:y=1890:w=960:h=6:color=white@0.25:t=fill,"
           f"drawbox=x=60:y=1890:w='960*t/{total:.3f}':h=6:color=0xE8204F:t=fill,format=yuv420p")
-    run_ffmpeg("-i", str(video), "-i", str(audio), "-map", "0:v", "-map", "1:a", "-vf", vf, "-t", f"{total:.3f}",
+    run_ffmpeg("-i", str(Path(video).resolve()), "-i", str(Path(audio).resolve()), "-map", "0:v", "-map", "1:a",
+               "-vf", vf, "-t", f"{total:.3f}",
                "-r", str(FPS), "-c:v", "libx264", "-profile:v", "high", "-preset", settings.preset,
                "-crf", str(settings.crf), "-g", str(FPS * 2), "-pix_fmt", "yuv420p",
                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", out.name, cwd=work)
