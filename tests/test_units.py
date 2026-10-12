@@ -276,3 +276,16 @@ def test_dotenv_inline_comments(tmp_path, monkeypatch):
     import os
     assert os.environ["A_X"] == "openai" and os.environ["B_X"] == "qiymat # emas"
     assert os.environ["C_X"] == "Sun'iy intellekt,Ta'lim" and os.environ["D_X"] == "+0%"
+
+
+def test_test_mode_defaults_are_cheap(tmp_path, monkeypatch):
+    from youtube_agent.config import Config
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "d"))
+    for k in ("TEST_MODE", "MAX_COST_PER_VIDEO", "LLM_PROVIDER", "OPENAI_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    c = Config.from_env()
+    assert c.test_mode and c.llm_model == "gpt-5-mini" and c.max_corrections == 0 and c.max_cost_usd == 0.30
+    monkeypatch.setenv("TEST_MODE", "0")
+    c = Config.from_env()
+    assert c.llm_model == "gpt-5" and c.max_corrections == 2 and c.max_cost_usd == 1.0

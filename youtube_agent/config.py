@@ -58,6 +58,7 @@ def _float(name: str, default: float) -> float:
 @dataclass
 class Config:
     # sun'iy intellekt
+    test_mode: bool
     llm_provider: str
     llm_model: str
     llm_cheap_model: str
@@ -87,6 +88,7 @@ class Config:
     min_seconds: float
     max_seconds: float
     max_corrections: int
+    max_cost_usd: float
     visual_workers: int
     qa_min: dict[str, float]
     # telegram / youtube / jadval
@@ -120,6 +122,11 @@ class Config:
         hh, mm = _env("PUBLISH_TIME", "19:00").split(":")
         days = [WEEKDAYS[d.strip().lower()[:3]] for d in _env("PUBLISH_DAYS", "mon,tue,thu,sat").split(",") if d.strip()]
         provider = _env("LLM_PROVIDER", "openai").lower()
+        # Sinov rejimi (standart YOQIQ): hamma joyda arzon model, avtomatik qayta tuzatishlarsiz.
+        # Sozlash tugagach .env da TEST_MODE=0 qiling.
+        test_mode = _flag("TEST_MODE", "1")
+        cheap = _env("OPENAI_CHEAP_MODEL", "gpt-5-mini") if provider == "openai" else _env("CLAUDE_CHEAP_MODEL", "claude-haiku-5-5")
+        main = _env("OPENAI_MODEL", "gpt-5") if provider == "openai" else _env("CLAUDE_MODEL", "claude-opus-5-5")
         tts_provider = _env("TTS_PROVIDER", "openai").lower()
         if tts_provider == "openai":
             voice = _env("OPENAI_TTS_VOICE", "marin")
@@ -129,9 +136,9 @@ class Config:
         data_dir.mkdir(parents=True, exist_ok=True)
         return cls(
             llm_provider=provider,
-            llm_model=_env("OPENAI_MODEL", "gpt-5") if provider == "openai" else _env("CLAUDE_MODEL", "claude-opus-5-5"),
-            llm_cheap_model=(_env("OPENAI_CHEAP_MODEL", "gpt-5-mini") if provider == "openai"
-                             else _env("CLAUDE_CHEAP_MODEL", "claude-haiku-5-5")),
+            test_mode=test_mode,
+            llm_model=cheap if test_mode else main,
+            llm_cheap_model=cheap,
             tts_provider=tts_provider,
             tts_voice=voice,
             tts_model=_env("TTS_MODEL", "gpt-4o-mini-tts"),
@@ -153,7 +160,8 @@ class Config:
             target_lufs=_float("TARGET_LUFS", -14.0),
             min_seconds=_float("SHORT_MIN_SECONDS", 25.0),
             max_seconds=_float("SHORT_MAX_SECONDS", 55.0),
-            max_corrections=int(_env("MAX_CORRECTIONS", "2")),
+            max_corrections=0 if test_mode else int(_env("MAX_CORRECTIONS", "2")),
+            max_cost_usd=_float("MAX_COST_PER_VIDEO", 0.30 if test_mode else 1.00),
             visual_workers=int(_env("VISUAL_WORKERS", "4")),
             qa_min={"storytelling": _float("QA_MIN_STORY", 6), "visual_relevance": _float("QA_MIN_VISUAL", 7),
                     "audio_quality": _float("QA_MIN_AUDIO", 7), "subtitle_quality": _float("QA_MIN_SUBTITLE", 6),

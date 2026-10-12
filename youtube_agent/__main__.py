@@ -58,6 +58,10 @@ def main() -> None:
     ap.add_argument("--reviewed", action="store_true", help="needs_review holatidagi videoni ko'rib chiqdim")
     a = ap.parse_args()
     cfg = Config.from_env()
+    if a.cmd in ("produce", "test-video", "resume", "qa"):
+        mode = "SINOV (arzon model)" if cfg.test_mode else "ISHCHI"
+        print(f"Rejim: {mode} | model: {cfg.llm_model} | bitta video chegarasi: ${cfg.max_cost_usd:.2f} | "
+              f"avtomatik tuzatishlar: {cfg.max_corrections}")
 
     if a.cmd == "auth":
         from .youtube import authorize
@@ -73,8 +77,19 @@ def main() -> None:
     elif a.cmd == "resume":
         from .factory import build_pipeline
         from .jobs import Job
+        from .schemas import JobState
         job = Job.load(cfg.jobs_dir, a.arg)
-        build_pipeline(cfg).run(job)
+        if job.state in (JobState.needs_review, JobState.qa_failed):
+            # tugagan bosqichlar fayllardan aniqlanadi; holatni oxirgi ishchi bosqichga qaytaramiz
+            prev = [h["state"] for h in job.meta["history"] if h["state"] not in ("needs_review", "qa_failed")]
+            job.meta["state"] = prev[-1] if prev else JobState.planned.value
+            job.save()
+        p = build_pipeline(cfg)
+        spent = float(job.meta.get("costs", {}).get("total", 0))
+        if p.s.max_cost_usd:  # avvalgi sarf + yana bir chegara
+            p.s.max_cost_usd = round(spent + cfg.max_cost_usd, 2)
+            print(f"Avval sarflangan: ~${spent:.3f}. Bu safar yana ${cfg.max_cost_usd:.2f} gacha ruxsat.")
+        p.run(job)
         _print_job(job)
 
     elif a.cmd == "jobs":

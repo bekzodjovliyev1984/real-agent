@@ -75,3 +75,23 @@ def test_low_visual_score_retries_then_needs_review(pipeline_factory):
     assert job.state == JobState.needs_review
     assert job.has("qa_report_1.json") and job.has("qa_report_3.json") and not job.has("qa_report_4.json")
     assert job.meta.get("rejected_assets")
+
+
+def test_budget_cap_stops_before_next_paid_stage(pipeline_factory, monkeypatch):
+    monkeypatch.setenv("PRICE_FAKE_MODEL", "100,100")  # har chaqiruv ~$0.11+ bo'ladi
+    llm = FakeLLM()
+    p = pipeline_factory(llm)
+    p.s.max_cost_usd = 0.5
+    job = p.new_job("Yangi mashinalar")
+    p.run(job)
+    assert job.state == JobState.needs_review
+    assert "pul chegarasi" in job.meta["history"][-1]["note"]
+    assert "ScriptDraft" not in llm.calls  # ssenariy (pullik) boshlanmagan
+    assert job.meta["costs"]["llm"] > 0.5
+    # resume: tadqiqot qayta to'lanmaydi
+    llm.calls.clear()
+    job.meta["state"] = JobState.researched.value
+    job.save()
+    p.s.max_cost_usd = 0
+    p.run(job)
+    assert "research" not in llm.calls and "TopicDraft" not in llm.calls

@@ -38,7 +38,7 @@ def build_pipeline(cfg: Config, llm: LLM | None = None) -> Pipeline:
         jobs_dir=cfg.jobs_dir,
         render=RenderSettings(cfg.font_bold_path, cfg.font_path, cfg.headline_font_path),
         min_seconds=cfg.min_seconds, max_seconds=cfg.max_seconds, max_corrections=cfg.max_corrections,
-        visual_workers=cfg.visual_workers,
+        visual_workers=cfg.visual_workers, max_cost_usd=cfg.max_cost_usd,
         ai_video_enabled=video_gen is not None, music_dir=cfg.music_dir, music_db=cfg.music_db, sfx_dir=cfg.sfx_dir,
         target_lufs=cfg.target_lufs, use_asr=cfg.use_asr, pronunciation_path=cfg.pronunciation_path,
         subtitle_style=SubtitleStyle(font_name=caption_font_name(cfg.font_bold_path)),

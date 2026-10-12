@@ -45,6 +45,7 @@ class PipelineSettings:
     min_seconds: float = 25.0
     max_seconds: float = 55.0
     max_corrections: int = 2
+    max_cost_usd: float = 0.0  # bitta video uchun chegarasi ($); 0 - cheklanmagan
     visual_workers: int = 4
     ai_video_enabled: bool = False
     music_dir: Path | None = None
@@ -60,6 +61,10 @@ class PipelineSettings:
 
 class PipelineError(RuntimeError):
     pass
+
+
+class BudgetExceeded(RuntimeError):
+    """Video uchun belgilangan pul chegarasi tugadi - qolgan pullik bosqichlar bajarilmaydi."""
 
 
 class Pipeline:
@@ -82,17 +87,22 @@ class Pipeline:
         """Ishni to'xtagan joyidan oxirigacha (approved yoki needs_review) olib boradi."""
         job.attach_log()
         usage_start = len(self.llm.usage) if self.llm else 0
+        self._job, self._usage_start = job, usage_start
+        self._base_llm = float(job.meta.get("costs", {}).get("llm", 0))
         try:
             if job.state in (JobState.approved, JobState.needs_review, JobState.published, JobState.rejected):
                 return job
             self._research(job, avoid_titles or [], performance)
             if job.state == JobState.needs_review:
                 return job
+            self._check_budget("ssenariy")
             self._script(job)
             if job.state == JobState.needs_review:
                 return job
             while True:
+                self._check_budget("kadrlar")
                 self._assets(job)
+                self._check_budget("ovoz")
                 self._audio(job)
                 self._subtitles(job)
                 self._render(job)
@@ -100,9 +110,16 @@ class Pipeline:
                 if report.approved:
                     job.set_state(JobState.approved, "sifat nazoratidan o'tdi")
                     break
+                if self.over_budget():
+                    job.set_state(JobState.needs_review, "pul chegarasi tugadi - avtomatik tuzatish qilinmadi")
+                    break
                 if not self._correct(job, report):
                     job.set_state(JobState.needs_review, f"tuzatib bo'lmadi: {report.route_to}")
                     break
+            return job
+        except BudgetExceeded as e:
+            job.set_state(JobState.needs_review, str(e))
+            log.warning("%s", e)
             return job
         except Exception as e:
             job.record_error(job.state.value, f"{e}\n{traceback.format_exc()[-1500:]}")
@@ -114,6 +131,24 @@ class Pipeline:
                 costs["total"] = round(sum(v for k, v in costs.items() if k != "total"), 4)
                 job.save()
             job.detach_log()
+
+    # ------------------------------------------------------------------ pul nazorati
+    def spent(self) -> float:
+        """Joriy ish uchun hozirgacha sarflangan taxminiy pul (avvalgi urinishlar bilan birga)."""
+        costs = self._job.meta.get("costs", {}) if getattr(self, "_job", None) else {}
+        llm_now = llm_cost(self.llm.usage[self._usage_start:]) if self.llm else 0.0
+        other = sum(float(v) for k, v in costs.items() if k not in ("llm", "total"))
+        return round(self._base_llm + llm_now + other, 4)
+
+    def over_budget(self) -> bool:
+        return bool(self.s.max_cost_usd) and self.spent() >= self.s.max_cost_usd
+
+    def _check_budget(self, stage: str) -> None:
+        log.info("Sarf hozircha: ~$%.3f%s", self.spent(),
+                 f" / chegara ${self.s.max_cost_usd:.2f}" if self.s.max_cost_usd else "")
+        if self.over_budget():
+            raise BudgetExceeded(f"pul chegarasi (${self.s.max_cost_usd:.2f}) tugadi, '{stage}' bosqichidan oldin "
+                                 f"to'xtatildi (sarf ~${self.spent():.3f}). Davom ettirish: resume {self._job.id}")
 
     # ------------------------------------------------------------------ bosqichlar
     def _research(self, job: Job, avoid: list[str], performance: str) -> None:
@@ -134,6 +169,7 @@ class Pipeline:
                 return
             log.warning("'%s' mavzusida tasdiqlangan da'volar kam (%d) - boshqa mavzu qidiriladi", topic.topic, len(usable))
             avoid.append(topic.topic)
+            self._check_budget("ikkinchi mavzu qidiruvi")
         job.set_state(JobState.needs_review, "ikki urinishda ham yetarli tasdiqlangan fakt topilmadi")
 
     def _load_claims(self, job: Job) -> list[Claim]:
@@ -169,6 +205,7 @@ class Pipeline:
         if all(s.id in have for s in plan.scenes):
             return
         searcher = self.searcher_factory()
+        searcher.budget_ok = lambda: not self.over_budget()  # chegara tugasa AI kadr tekshiruvi to'xtaydi
         # boshqa sahnalardagi kadrlar takrorlanmasin
         for a in have.values():
             searcher.used_keys.add(f"{a.provider}:{a.asset_id}")
@@ -286,7 +323,9 @@ class Pipeline:
         video = job.path("render/video.mp4")
         report = technical_check(video, plan, nar, self.assets(job), job.path("captions.ass"), self.s.qa)
         review = None
-        if self.llm:
+        if self.llm and self.over_budget():
+            report.notes.append("pul chegarasi tugagani uchun AI tekshiruv o'tkazilmadi - o'zingiz ko'rib chiqing")
+        elif self.llm:
             try:
                 review = semantic_review(self.llm, video, plan, nar.scene_bounds, job.root)
             except Exception as e:

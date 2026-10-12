@@ -160,7 +160,18 @@ va Analytics.
   avtomatik Short bo'ladi, buni yuklangandan keyin tekshiring.
 - "Viewed vs swiped away" ko'rsatkichi Analytics API'da yo'q, bazada `NULL` saqlanadi.
 
-## 8. Bitta video narxi (taxminiy)
+## 8. Pulni tejash: sinov rejimi va chegara
+
+- `TEST_MODE=1` (standart holatda yoqiq): hamma joyda arzon `gpt-5-mini` modeli ishlatiladi, avtomatik qayta tuzatishlar o'chiq.
+  Sozlash tugagach `.env` faylida `TEST_MODE=0` qiling.
+- `MAX_COST_PER_VIDEO=0.30`: bitta video uchun sarf chegarasi. Sarf shundan oshsa, jarayon keyingi pullik
+  bosqichdan oldin to'xtaydi. Shu paytgacha qilingan ish saqlanadi.
+- **Hech qachon `produce` buyrug'ini qayta ishga tushirmang** - u hammasini boshidan, yana pul to'lab qiladi.
+  Buning o'rniga to'xtagan ishni davom ettiring: `python -m youtube_agent resume <job_id>`. Bu buyruq faqat qolgan
+  bosqichlarni bajaradi va yana bitta chegara miqdorigacha ruxsat beradi.
+- platform.openai.com → Settings → Limits bo'limida OpenAI'ning o'zida ham oylik chegara qo'ying.
+
+## 9. Bitta video narxi (taxminiy)
 
 Narxlar `pricing.py` va `.env` dagi `PRICE_*` bilan sozlanadi. Har ishning haqiqiy sarfi `job.json → costs`
 maydoniga yoziladi.
@@ -179,12 +190,12 @@ Asos qilingan narxlar (1M token uchun): GPT-5 $1.25 kirish / $10 chiqish, GPT-5 
 veb-qidiruv ~$0.01, TTS ~$0.015/daqiqa, whisper $0.006/daqiqa, Sora ~$0.10/soniya. Uchinchi tomon
 manbalari bir-biriga zid, rasmiy narx sahifasini tekshiring.
 
-## 9. Namuna
+## 10. Namuna
 
 `docs/examples/plan.example.json` va `docs/examples/qa_report.example.json` soxta provayderlar bilan o'tkazilgan
 test ishidan olingan. Ulardagi URL va faktlar test uchun o'ylab topilgan, maqsad faqat fayl tuzilmasini ko'rsatish.
 
-## 10. Telegram buyruqlari
+## 11. Telegram buyruqlari
 
 `/status`, `/video` (hozir yasash), `/jobs`, `/comments`, `/analytics`, `/cancel`. Video tayyor bo'lganda bot
 QA hisoboti va narx bilan yuboradi:

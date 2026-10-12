@@ -203,6 +203,7 @@ class VisualSearcher:
         self.used_keys: set[str] = set()
         self.used_hashes: list[str] = []
         self._lock = threading.Lock()  # sahnalar parallel qidirilganda takrorni oldini olish
+        self.budget_ok = lambda: True    # orkestrator pul chegarasini shu orqali beradi
 
     # --------------------------------------------------------------- yordamchi
     def _search(self, name: str, query: str, page_urls: list[str]) -> list[Candidate]:
@@ -256,6 +257,9 @@ class VisualSearcher:
                                criteria=scene.relevance_criteria or scene.visual_description, query=query)
         return self.llm.parse(prompt, VisualCheckDraft, effort="low", images=frames, cheap=True)
 
+    def _vision(self) -> bool:
+        return bool(self.llm and self.s.vision_check and self.budget_ok())
+
     def _is_duplicate(self, fp: str) -> bool:
         return any(hash_distance(fp, h) <= 6 for h in self.used_hashes)
 
@@ -293,13 +297,13 @@ class VisualSearcher:
                 scored.sort(key=lambda x: -x[0])
                 slog.tried.append({"provider": name, "query": q, "found": len(cands), "usable": len(scored)})
                 for _, c in scored[:2]:
-                    if self.llm and self.s.vision_check and checks >= self.s.max_checks_per_scene:
+                    if self._vision() and checks >= self.s.max_checks_per_scene:
                         break
                     asset = self._try_candidate(scene, c, scene_dir, slog)
                     checks += 1
                     if asset:
                         return asset, slog
-            if self.llm and self.s.vision_check and checks >= self.s.max_checks_per_scene:
+            if self._vision() and checks >= self.s.max_checks_per_scene:
                 break
         if self.video_gen and scene.video_generation_prompt and scene.visual_source_type != "ai_video":
             asset = self._ai_video(scene, scene_dir, slog)
@@ -321,7 +325,7 @@ class VisualSearcher:
                 entry["rejected"] = "takroriy kadr"
                 return None
             score, reason = None, ""
-            if self.llm and self.s.vision_check:
+            if self._vision():
                 verdict = self._check_relevance(scene, frames, c.query)
                 score, reason = verdict.score, verdict.reason
                 entry.update(score=score, reason=reason[:200])
